@@ -7,8 +7,8 @@ export default function TiendaLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100">
-      <div className="flex-1">
+    <div className="min-h-screen flex flex-col justify-between overflow-x-hidden w-full max-w-full">
+      <div className="flex-1 w-full min-w-0">
         {children}
       </div>
       <Footer />

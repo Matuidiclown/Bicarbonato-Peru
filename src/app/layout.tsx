@@ -17,8 +17,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es">
-      <body className="antialiased min-h-screen flex flex-col bg-slate-50 text-slate-800">
+    <html lang="es" className="overflow-x-hidden">
+      <body className="antialiased min-h-screen flex flex-col bg-slate-50 text-slate-800 overflow-x-hidden w-full max-w-full">
         <Suspense fallback={null}>
           <ReferralTracker />
         </Suspense>

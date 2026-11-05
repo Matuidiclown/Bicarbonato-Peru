@@ -24,6 +24,19 @@ import {
   Info
 } from 'lucide-react'
 
+// Emojis Unicode puros generados en memoria para evitar corrupción de codificación
+const EMOJI = {
+  DOC: String.fromCodePoint(0x1F4C4),    // 📄
+  USER: String.fromCodePoint(0x1F464),   // 👤
+  PHONE: String.fromCodePoint(0x1F4F1),  // 📱
+  PIN: String.fromCodePoint(0x1F4CD),    // 📍
+  TRUCK: String.fromCodePoint(0x1F69A),  // 🚚
+  CASH: String.fromCodePoint(0x1F4B5),   // 💵
+  CART: String.fromCodePoint(0x1F6D2),   // 🛒
+  MONEY: String.fromCodePoint(0x1F4B0),  // 💰
+  BULLET: '\u2022'                      // •
+}
+
 export const LIMA_DISTRICTS = [
   { name: 'Ate', note: 'Enviar ubicación para confirmar cobertura' },
   { name: 'Barranco' },
@@ -102,7 +115,7 @@ export default function CarritoPage() {
     setIsSubmitting(true)
 
     try {
-      // 1. Asignación de Vendedora (Prioridad: Enlace de Referido vs. Turno Rotativo Orgánico)
+      // 1. Asignación de Vendedora (Prioridad Enlace de Referido vs. Turno Rotativo Orgánico)
       let rawSellerPhone = '924428558'
       let assignedSellerId: string | null = null
 
@@ -137,7 +150,7 @@ export default function CarritoPage() {
           assignedSellerId = assignedSeller.id
           rawSellerPhone = assignedSeller.phone_number
 
-          // Solo actualizamos el turno cuando es asignación equitativa general
+          // Actualizar turno equitativo
           await supabase
             .from('whatsapp_sellers')
             .update({ last_assigned_at: new Date().toISOString() })
@@ -150,7 +163,7 @@ export default function CarritoPage() {
       const nineDigits = cleanDigits.slice(-9)
       const sellerPhone = `51${nineDigits}`
 
-      // 2. Insertar orden en Supabase (enviando columnas compatibles para evitar errores NOT NULL)
+      // 2. Insertar orden en Supabase
       const { data: insertedOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -212,16 +225,16 @@ export default function CarritoPage() {
       const numCode = insertedOrder?.order_number || Math.floor(100 + Math.random() * 900)
       const orderCode = String(numCode).padStart(4, '0')
 
-      // 5. Formato de Mensaje para WhatsApp
-      let message = `📄 *Pedido #${orderCode}*\n`
-      message += `👤 *${fullName.trim()}* | 📱 *${phone.trim()}*\n`
-      message += `📍 *${district}* - ${address.trim()}`
+      // 5. Construcción del mensaje usando los Emojis Unicode limpios
+      let message = `${EMOJI.DOC} *Pedido #${orderCode}*\n`
+      message += `${EMOJI.USER} *${fullName.trim()}* | ${EMOJI.PHONE} *${phone.trim()}*\n`
+      message += `${EMOJI.PIN} *${district}* - ${address.trim()}`
       if (notes.trim()) {
         message += ` (Ref: ${notes.trim()})`
       }
-      message += `\n🚚 *Envío a domicilio* | 💵 *Pago contra entrega*\n\n`
+      message += `\n${EMOJI.TRUCK} *Envío a domicilio* | ${EMOJI.CASH} *Pago contra entrega*\n\n`
 
-      message += `🛒 *Detalle:*\n`
+      message += `${EMOJI.CART} *Detalle:*\n`
       items.forEach(item => {
         const tiers = item.price_tiers || []
         const baseTier = tiers.find(t => t.min_quantity === 1) || tiers[0]
@@ -232,21 +245,21 @@ export default function CarritoPage() {
         const itemSubtotal = actualPriceUnit * item.quantity
 
         const presentationLabel = item.presentation ? ` (${item.presentation})` : ''
-        message += `• ${item.quantity} x ${item.name}${presentationLabel} a S/ ${actualPriceUnit.toFixed(2)} c/u = S/ ${itemSubtotal.toFixed(2)}\n`
+        message += `${EMOJI.BULLET} ${item.quantity} x ${item.name}${presentationLabel} a S/ ${actualPriceUnit.toFixed(2)} c/u = S/ ${itemSubtotal.toFixed(2)}\n`
       })
 
-      message += `\n💰 *Total productos:* S/ ${finalTotal.toFixed(2)}`
+      message += `\n${EMOJI.MONEY} *Total productos:* S/ ${finalTotal.toFixed(2)}`
       if (totalDiscount > 0) {
         message += ` | *Ahorro por volumen:* S/ ${totalDiscount.toFixed(2)}`
       }
       message += `\n(El costo de envío lo confirma la vendedora)`
 
+      // 6. Endpoint oficial directo sin redirección intermedia de wa.me
       const encodedMessage = encodeURIComponent(message)
-      const whatsappUrl = `https://wa.me/${sellerPhone}?text=${encodedMessage}`
+      const whatsappUrl = `https://api.whatsapp.com/send?phone=${sellerPhone}&text=${encodedMessage}`
 
       clearCart()
-      window.open(whatsappUrl, '_blank')
-      router.push('/')
+      window.location.href = whatsappUrl
     } catch (err: any) {
       console.error('Error al procesar el pedido:', err)
       setErrorMessage(err.message || 'Error al conectar con la base de datos.')
@@ -471,7 +484,7 @@ export default function CarritoPage() {
                     ))}
                   </select>
                   <p className="text-[10px] text-gray-500 mt-1 font-medium">
-                    Selecciona la comuna o distrito de Lima donde recibirás tus productos.
+                    Selecciona el distrito de Lima donde recibirás tus productos.
                   </p>
 
                   {selectedDistrictData?.note && (
