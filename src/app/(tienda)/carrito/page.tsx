@@ -24,21 +24,6 @@ import {
   Info
 } from 'lucide-react'
 
-// Emojis declarados por puntos de código hexadecimal Unicode
-// Inmunes a cualquier tipo de corrupción de archivo, consola o compilador
-const EMOJI = {
-  DOC: String.fromCodePoint(0x1F4C4),     // 📄
-  USER: String.fromCodePoint(0x1F464),    // 👤
-  PHONE: String.fromCodePoint(0x1F4F1),   // 📱
-  PIN: String.fromCodePoint(0x1F4CD),     // 📍
-  TRUCK: String.fromCodePoint(0x1F69A),   // 🚚
-  CASH: String.fromCodePoint(0x1F4B5),    // 💵
-  CART: String.fromCodePoint(0x1F6D2),    // 🛒
-  BAG: String.fromCodePoint(0x1F4B0),     // 💰
-  BULLET: String.fromCodePoint(0x2022),   // •
-  PARTY: String.fromCodePoint(0x1F389)    // 🎉
-}
-
 export const LIMA_DISTRICTS = [
   { name: 'Ate', note: 'Enviar ubicación para confirmar cobertura' },
   { name: 'Barranco' },
@@ -77,7 +62,7 @@ export default function CarritoPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  const { items, updateQuantity, removeItem, clearCart, getCalculatedTotals } = useCartStore()
+  const { items, updateQuantity, clearCart, getCalculatedTotals } = useCartStore()
   const { subtotalBase, totalDiscount, finalTotal, totalCount } = getCalculatedTotals()
 
   const MIN_ORDER_AMOUNT = 40.0
@@ -117,44 +102,67 @@ export default function CarritoPage() {
     setIsSubmitting(true)
 
     try {
-      // 1. Asignación de Vendedora (Round-Robin)
+      // 1. Asignación de Vendedora (Prioridad: Enlace de Referido vs. Turno Rotativo Orgánico)
       let rawSellerPhone = '924428558'
       let assignedSellerId: string | null = null
 
-      const { data: sellers } = await supabase
-        .from('whatsapp_sellers')
-        .select('*')
-        .eq('is_active', true)
-        .order('last_assigned_at', { ascending: true })
-        .limit(1)
+      const referralCode = useCartStore.getState().referralCode
 
-      if (sellers && sellers.length > 0) {
-        const assignedSeller = sellers[0]
-        assignedSellerId = assignedSeller.id
-        rawSellerPhone = assignedSeller.phone_number
-
-        await supabase
+      // A) Si el cliente entró por un enlace ?ref=...
+      if (referralCode) {
+        const { data: sellerByRef } = await supabase
           .from('whatsapp_sellers')
-          .update({ last_assigned_at: new Date().toISOString() })
-          .eq('id', assignedSeller.id)
+          .select('id, phone_number')
+          .eq('ref_code', referralCode)
+          .eq('is_active', true)
+          .maybeSingle()
+
+        if (sellerByRef) {
+          assignedSellerId = sellerByRef.id
+          rawSellerPhone = sellerByRef.phone_number
+        }
       }
 
-      // Normalizar número a 51 + 9 dígitos
+      // B) Si no vino por enlace o el ref_code no existe/está inactivo: Turno Rotativo (Round-Robin)
+      if (!assignedSellerId) {
+        const { data: sellers } = await supabase
+          .from('whatsapp_sellers')
+          .select('id, phone_number')
+          .eq('is_active', true)
+          .order('last_assigned_at', { ascending: true })
+          .limit(1)
+
+        if (sellers && sellers.length > 0) {
+          const assignedSeller = sellers[0]
+          assignedSellerId = assignedSeller.id
+          rawSellerPhone = assignedSeller.phone_number
+
+          // Solo actualizamos el turno cuando es asignación equitativa general
+          await supabase
+            .from('whatsapp_sellers')
+            .update({ last_assigned_at: new Date().toISOString() })
+            .eq('id', assignedSeller.id)
+        }
+      }
+
+      // Normalizar número a formato internacional (51 + 9 dígitos)
       const cleanDigits = rawSellerPhone.replace(/\D/g, '')
       const nineDigits = cleanDigits.slice(-9)
       const sellerPhone = `51${nineDigits}`
 
-      // 2. Insertar orden en Supabase según el esquema oficial
+      // 2. Insertar orden en Supabase (enviando columnas compatibles para evitar errores NOT NULL)
       const { data: insertedOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
           customer_name: fullName.trim(),
           customer_phone: phone.trim(),
+          address: address.trim(),
+          delivery_address: address.trim(),
           district_name: district,
           delivery_district: district,
-          address: address.trim(),
           reference: notes.trim() || null,
-          delivery_type: 'Envío a domicilio',
+          notes: notes.trim() || null,
+          delivery_type: 'Delivery a domicilio',
           payment_method: 'Pago contra entrega',
           total_amount: finalTotal,
           subtotal: subtotalBase,
@@ -169,8 +177,8 @@ export default function CarritoPage() {
         .single()
 
       if (orderError) {
-        console.error('Error en Supabase Orders:', orderError)
-        throw new Error(`Error BD: ${orderError.message}`)
+        console.error('Error insertando pedido en Supabase:', orderError)
+        throw new Error(`Error en Supabase: ${orderError.message}`)
       }
 
       // 3. Insertar detalle de productos en order_items
@@ -178,10 +186,10 @@ export default function CarritoPage() {
         const orderItemsData = items.map(item => {
           const tiers = item.price_tiers || []
           const baseTier = tiers.find(t => t.min_quantity === 1) || tiers[0]
-          const basePriceUnit = baseTier ? baseTier.unit_price : 0
+          const basePriceUnit = baseTier ? Number(baseTier.unit_price) : 0
           const sortedTiers = [...tiers].sort((a, b) => b.min_quantity - a.min_quantity)
           const applicableTier = sortedTiers.find(t => item.quantity >= t.min_quantity) || baseTier
-          const actualPriceUnit = applicableTier ? applicableTier.unit_price : basePriceUnit
+          const actualPriceUnit = applicableTier ? Number(applicableTier.unit_price) : basePriceUnit
 
           return {
             order_id: insertedOrder.id,
@@ -196,7 +204,7 @@ export default function CarritoPage() {
 
         const { error: itemsError } = await supabase.from('order_items').insert(orderItemsData)
         if (itemsError) {
-          console.error('Error en order_items:', itemsError)
+          console.warn('Advertencia en detalle de productos:', itemsError.message)
         }
       }
 
@@ -204,43 +212,43 @@ export default function CarritoPage() {
       const numCode = insertedOrder?.order_number || Math.floor(100 + Math.random() * 900)
       const orderCode = String(numCode).padStart(4, '0')
 
-      // 5. Construir mensaje con símbolos dinámicos
-      let message = `${EMOJI.DOC} *Pedido #${orderCode}*\n`
-      message += `${EMOJI.USER} *${fullName.trim()}* | ${EMOJI.PHONE} *${phone.trim()}*\n`
-      message += `${EMOJI.PIN} *${district}* - ${address.trim()}`
+      // 5. Formato de Mensaje para WhatsApp
+      let message = `📄 *Pedido #${orderCode}*\n`
+      message += `👤 *${fullName.trim()}* | 📱 *${phone.trim()}*\n`
+      message += `📍 *${district}* - ${address.trim()}`
       if (notes.trim()) {
         message += ` (Ref: ${notes.trim()})`
       }
-      message += `\n${EMOJI.TRUCK} *Envío a domicilio* | ${EMOJI.CASH} *Pago contra entrega*\n\n`
+      message += `\n🚚 *Envío a domicilio* | 💵 *Pago contra entrega*\n\n`
 
-      message += `${EMOJI.CART} *Detalle:*\n`
+      message += `🛒 *Detalle:*\n`
       items.forEach(item => {
         const tiers = item.price_tiers || []
         const baseTier = tiers.find(t => t.min_quantity === 1) || tiers[0]
-        const basePriceUnit = baseTier ? baseTier.unit_price : 0
+        const basePriceUnit = baseTier ? Number(baseTier.unit_price) : 0
         const sortedTiers = [...tiers].sort((a, b) => b.min_quantity - a.min_quantity)
         const applicableTier = sortedTiers.find(t => item.quantity >= t.min_quantity) || baseTier
-        const actualPriceUnit = applicableTier ? applicableTier.unit_price : basePriceUnit
+        const actualPriceUnit = applicableTier ? Number(applicableTier.unit_price) : basePriceUnit
         const itemSubtotal = actualPriceUnit * item.quantity
 
         const presentationLabel = item.presentation ? ` (${item.presentation})` : ''
-        message += `${EMOJI.BULLET} ${item.quantity} x ${item.name}${presentationLabel} a S/ ${actualPriceUnit.toFixed(2)} c/u = S/ ${itemSubtotal.toFixed(2)}\n`
+        message += `• ${item.quantity} x ${item.name}${presentationLabel} a S/ ${actualPriceUnit.toFixed(2)} c/u = S/ ${itemSubtotal.toFixed(2)}\n`
       })
 
-      message += `\n${EMOJI.BAG} *Total productos:* S/ ${finalTotal.toFixed(2)}`
+      message += `\n💰 *Total productos:* S/ ${finalTotal.toFixed(2)}`
       if (totalDiscount > 0) {
         message += ` | *Ahorro por volumen:* S/ ${totalDiscount.toFixed(2)}`
       }
       message += `\n(El costo de envío lo confirma la vendedora)`
 
       const encodedMessage = encodeURIComponent(message)
-      const whatsappUrl = `https://api.whatsapp.com/send?phone=${sellerPhone}&text=${encodedMessage}`
+      const whatsappUrl = `https://wa.me/${sellerPhone}?text=${encodedMessage}`
 
       clearCart()
       window.open(whatsappUrl, '_blank')
       router.push('/')
     } catch (err: any) {
-      console.error('Error procesando pedido:', err)
+      console.error('Error al procesar el pedido:', err)
       setErrorMessage(err.message || 'Error al conectar con la base de datos.')
     } finally {
       setIsSubmitting(false)
@@ -334,11 +342,11 @@ export default function CarritoPage() {
                 {items.map(item => {
                   const tiers = item.price_tiers || []
                   const baseTier = tiers.find(t => t.min_quantity === 1) || tiers[0]
-                  const basePriceUnit = baseTier ? baseTier.unit_price : 0
+                  const basePriceUnit = baseTier ? Number(baseTier.unit_price) : 0
 
                   const sortedTiers = [...tiers].sort((a, b) => b.min_quantity - a.min_quantity)
                   const applicableTier = sortedTiers.find(t => item.quantity >= t.min_quantity) || baseTier
-                  const actualPriceUnit = applicableTier ? applicableTier.unit_price : basePriceUnit
+                  const actualPriceUnit = applicableTier ? Number(applicableTier.unit_price) : basePriceUnit
 
                   const hasDiscount = actualPriceUnit < basePriceUnit
 
@@ -534,7 +542,7 @@ export default function CarritoPage() {
 
                 <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-base font-black text-gray-900">
                   <span>Total Productos:</span>
-                  <span>S/ {finalTotal.toFixed(2)}</span>
+                  <span className="text-[#1B2A82] text-lg">S/ {finalTotal.toFixed(2)}</span>
                 </div>
               </div>
 

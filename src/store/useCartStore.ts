@@ -18,28 +18,37 @@ export interface CartItem {
   quantity: number
 }
 
+interface CartTotals {
+  subtotalBase: number
+  totalDiscount: number
+  finalTotal: number
+  totalCount: number
+}
+
 interface CartStore {
   items: CartItem[]
+  referralCode: string | null
+  setReferralCode: (code: string) => void
   addItem: (product: any, quantity?: number) => void
   removeItem: (productId: string) => void
   updateQuantity: (productId: string, quantity: number) => void
   clearCart: () => void
-  
-  // Helpers de cálculos
-  getCalculatedTotals: () => {
-    subtotalBase: number
-    totalDiscount: number
-    finalTotal: number
-    totalCount: number
-  }
+  getCalculatedTotals: () => CartTotals
   getTotalAmount: () => number
   getTotalSavings: () => number
+  getTotalItemsCount: () => number
 }
 
 export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
+      referralCode: null,
+
+      // Guarda el código de la vendedora en minúsculas y sin espacios
+      setReferralCode: (code: string) => {
+        set({ referralCode: code.toLowerCase().trim() })
+      },
 
       addItem: (product, quantity = 1) => {
         const currentItems = get().items
@@ -96,24 +105,24 @@ export const useCartStore = create<CartStore>()(
           totalCount += item.quantity
           const tiers = item.price_tiers || []
           
-          // Precio base (1 unidad)
+          // Precio base para 1 unidad
           const baseTier = tiers.find(t => t.min_quantity === 1) || tiers[0]
-          const basePriceUnit = baseTier ? baseTier.unit_price : 0
+          const basePriceUnit = baseTier ? Number(baseTier.unit_price) : 0
           subtotalBase += basePriceUnit * item.quantity
 
-          // Buscar la mejor escala según la cantidad acumulada
+          // Escala aplicable según volumen acumulado
           const sortedTiers = [...tiers].sort((a, b) => b.min_quantity - a.min_quantity)
           const applicableTier = sortedTiers.find(t => item.quantity >= t.min_quantity) || baseTier
-          const actualPriceUnit = applicableTier ? applicableTier.unit_price : basePriceUnit
+          const actualPriceUnit = applicableTier ? Number(applicableTier.unit_price) : basePriceUnit
 
           finalTotal += actualPriceUnit * item.quantity
         })
 
-        const totalDiscount = subtotalBase - finalTotal
+        const totalDiscount = Math.max(0, subtotalBase - finalTotal)
 
         return {
           subtotalBase,
-          totalDiscount: totalDiscount > 0 ? totalDiscount : 0,
+          totalDiscount,
           finalTotal,
           totalCount
         }
@@ -125,6 +134,10 @@ export const useCartStore = create<CartStore>()(
 
       getTotalSavings: () => {
         return get().getCalculatedTotals().totalDiscount
+      },
+
+      getTotalItemsCount: () => {
+        return get().getCalculatedTotals().totalCount
       }
     }),
     {
