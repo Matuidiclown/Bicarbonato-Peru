@@ -39,13 +39,23 @@ interface CartStore {
   getTotalItemsCount: () => number
 }
 
+// Helper exportado para cálculo de precio unitario según escala
+export function calculateUnitPrice(tiers: PriceTier[] = [], quantity: number = 1): number {
+  if (!tiers || tiers.length === 0) return 0
+  const baseTier = tiers.find(t => t.min_quantity === 1) || tiers[0]
+  const basePrice = baseTier ? Number(baseTier.unit_price) : 0
+
+  const sortedTiers = [...tiers].sort((a, b) => b.min_quantity - a.min_quantity)
+  const applicableTier = sortedTiers.find(t => quantity >= t.min_quantity) || baseTier
+  return applicableTier ? Number(applicableTier.unit_price) : basePrice
+}
+
 export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
       referralCode: null,
 
-      // Guarda el código de la vendedora en minúsculas y sin espacios
       setReferralCode: (code: string) => {
         set({ referralCode: code.toLowerCase().trim() })
       },
@@ -105,12 +115,10 @@ export const useCartStore = create<CartStore>()(
           totalCount += item.quantity
           const tiers = item.price_tiers || []
           
-          // Precio base para 1 unidad
           const baseTier = tiers.find(t => t.min_quantity === 1) || tiers[0]
           const basePriceUnit = baseTier ? Number(baseTier.unit_price) : 0
           subtotalBase += basePriceUnit * item.quantity
 
-          // Escala aplicable según volumen acumulado
           const sortedTiers = [...tiers].sort((a, b) => b.min_quantity - a.min_quantity)
           const applicableTier = sortedTiers.find(t => item.quantity >= t.min_quantity) || baseTier
           const actualPriceUnit = applicableTier ? Number(applicableTier.unit_price) : basePriceUnit
