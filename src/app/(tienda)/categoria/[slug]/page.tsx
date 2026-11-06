@@ -1,246 +1,314 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { Suspense, useEffect, useState, useMemo } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { useCartStore } from '@/store/useCartStore'
-import { Header, CATALOG_CATEGORIES } from '@/components/Header'
-import { CartSidebar } from '@/components/CartSidebar'
-import { Plus, Minus, ArrowLeft, Tag, Layers, ShoppingBag } from 'lucide-react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+import { useCartStore, calculateUnitPrice } from '@/store/useCartStore'
+import { Header, CATALOG_CATEGORIES } from '@/components/Header'
+import {
+  ShoppingBag,
+  Plus,
+  Minus,
+  ArrowLeft,
+  ArrowRight,
+  Layers,
+  Sparkles
+} from 'lucide-react'
 
-export default function CategoriaPage() {
+function CategoriaContent() {
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
+  const supabase = createClient()
 
-  const slug = params?.slug as string
-  const activeSub = searchParams.get('sub')
+  const slug = (params?.slug as string) || ''
+  const subcategoryParam = searchParams.get('sub')
+
+  const categoryInfo = CATALOG_CATEGORIES.find((c) => c.slug === slug)
 
   const [products, setProducts] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(subcategoryParam)
 
-  const { items, addItem, updateQuantity } = useCartStore()
-  const supabase = createClient()
+  const items = useCartStore((state) => state.items)
+  const addItem = useCartStore((state) => state.addItem)
+  const updateQuantity = useCartStore((state) => state.updateQuantity)
 
-  const categoryMeta = CATALOG_CATEGORIES.find(c => c.id === slug) || {
-    id: slug,
-    label: slug ? slug.replace('-', ' ').toUpperCase() : 'Categoría',
-    subcategories: []
-  }
+  // Cálculo de totales derivado para la barra flotante
+  const { finalTotal, totalDiscount, totalCount } = useMemo(() => {
+    let subtotalBase = 0
+    let total = 0
+    let count = 0
+
+    items.forEach((item) => {
+      count += item.quantity
+      const tiers = item.price_tiers || []
+      const baseTier = tiers.find((t: any) => t.min_quantity === 1) || tiers[0]
+      const basePriceUnit = baseTier ? Number(baseTier.unit_price) : 0
+      subtotalBase += basePriceUnit * item.quantity
+
+      const sortedTiers = [...tiers].sort((a: any, b: any) => b.min_quantity - a.min_quantity)
+      const applicableTier = sortedTiers.find((t: any) => item.quantity >= t.min_quantity) || baseTier
+      const actualPriceUnit = applicableTier ? Number(applicableTier.unit_price) : basePriceUnit
+
+      total += actualPriceUnit * item.quantity
+    })
+
+    const discount = Math.max(0, subtotalBase - total)
+
+    return {
+      finalTotal: total,
+      totalDiscount: discount,
+      totalCount: count
+    }
+  }, [items])
 
   useEffect(() => {
-    const fetchCategoryProducts = async () => {
+    async function loadCategoryProducts() {
+      if (!slug) return
       setIsLoading(true)
 
       let query = supabase
         .from('products')
         .select('*, price_tiers(*)')
         .eq('is_active', true)
-        .eq('category', slug)
-        .order('created_at', { ascending: false })
 
-      if (activeSub) {
-        query = query.eq('subcategory', activeSub)
+      if (slug === 'packs') {
+        query = query.or('category.eq.packs,name.ilike.%pack%,name.ilike.%kit%')
+      } else {
+        query = query.ilike('category', `%${slug}%`)
       }
 
-      const { data, error } = await query
+      const { data, error } = await query.order('created_at', { ascending: false })
 
       if (!error && data) {
         setProducts(data)
+      } else {
+        setProducts([])
       }
       setIsLoading(false)
     }
 
-    if (slug) {
-      fetchCategoryProducts()
-    }
-  }, [slug, activeSub])
+    loadCategoryProducts()
+  }, [slug, supabase])
 
-  const renderProductControls = (product: any) => {
-    const cartItem = items.find(i => i.id === product.id)
-    const currentQty = cartItem ? cartItem.quantity : 0
+  // Filtro de subcategorías
+  const filteredProducts = selectedSubcategory
+    ? products.filter((p) => p.subcategory?.toLowerCase() === selectedSubcategory.toLowerCase())
+    : products
 
-    if (currentQty > 0) {
-      return (
-        <div className="flex items-center justify-between bg-blue-50 p-1.5 rounded-2xl border border-blue-200">
-          <button
-            onClick={() => updateQuantity(product.id, currentQty - 1)}
-            className="w-9 h-9 rounded-xl bg-white hover:bg-gray-100 text-gray-800 flex items-center justify-center font-black shadow-sm transition-colors"
-          >
-            <Minus className="w-4 h-4" />
-          </button>
-          <div className="text-center">
-            <span className="text-xs font-black text-[#1B2A82] block">{currentQty} en carrito</span>
-            <span className="text-[9px] font-extrabold text-blue-600 uppercase">Modificar</span>
-          </div>
-          <button
-            onClick={() => updateQuantity(product.id, currentQty + 1)}
-            className="w-9 h-9 rounded-xl bg-[#1B2A82] hover:bg-[#142066] text-white flex items-center justify-center font-black shadow-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
-      )
-    }
-
-    return (
-      <button
-        onClick={() => addItem(product, 1)}
-        className="w-full bg-[#1B2A82] hover:bg-[#142066] text-white font-extrabold rounded-2xl py-3 text-sm flex items-center justify-center gap-2 shadow-md transition-all"
-      >
-        <Plus className="w-5 h-5 stroke-[3]" />
-        <span>Agregar al Carrito</span>
-      </button>
-    )
+  const getItemQuantityInCart = (productId: string) => {
+    const item = items.find((i) => i.id === productId)
+    return item ? item.quantity : 0
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 pb-16">
+    <div className="min-h-screen bg-slate-100 flex flex-col pb-24 w-full max-w-full overflow-x-hidden">
       <Header activeCategory={slug} />
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          
-          {/* COLUMNA IZQUIERDA: PRODUCTOS DE LA CATEGORÍA */}
-          <div className="lg:col-span-2 space-y-6">
-            <Link
-              href="/"
-              className="text-xs font-extrabold text-[#1B2A82] hover:underline flex items-center gap-1.5 self-start"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Volver a la Portada (Ofertas y Packs)</span>
-            </Link>
+      <main className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-5 space-y-6 flex-1 min-w-0">
+        {/* NAVEGACIÓN Y TÍTULO */}
+        <div className="space-y-3">
+          <Link
+            href="/"
+            className="text-xs font-extrabold text-[#1B2A82] hover:underline flex items-center gap-1.5 self-start"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Volver a la Portada</span>
+          </Link>
 
-            <div className="bg-[#1B2A82] text-white rounded-3xl p-6 shadow-md space-y-2">
-              <div className="flex items-center gap-2 text-blue-300 text-xs font-bold uppercase tracking-wider">
-                <Layers className="w-4 h-4" />
-                <span>Sección de Catálogo</span>
+          <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">{categoryInfo?.emoji || '🧼'}</span>
+              <div>
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 leading-tight">
+                  {categoryInfo?.label || 'Categoría de Limpieza'}
+                </h1>
+                <p className="text-xs text-gray-500 font-semibold">
+                  Precios por mayor y menor con escala automática
+                </p>
               </div>
-              <h1 className="text-2xl font-black">{categoryMeta.label}</h1>
-              <p className="text-xs text-blue-100 font-medium">
-                Explora los productos y aprovecha los precios con descuento automático por cantidad.
-              </p>
             </div>
 
-            {categoryMeta.subcategories.length > 0 && (
-              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 space-y-2">
-                <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                  <Tag className="w-3.5 h-3.5 text-[#1B2A82]" />
-                  <span>Filtrar por Sub-Producto:</span>
-                </p>
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    onClick={() => router.push(`/categoria/${slug}`)}
-                    className={`text-xs font-extrabold px-3.5 py-1.5 rounded-xl transition-all ${
-                      !activeSub
-                        ? 'bg-[#1B2A82] text-white shadow-sm'
-                        : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    Todos en {categoryMeta.label}
-                  </button>
-                  {categoryMeta.subcategories.map(sub => (
-                    <button
-                      key={sub}
-                      onClick={() => router.push(`/categoria/${slug}?sub=${encodeURIComponent(sub)}`)}
-                      className={`text-xs font-extrabold px-3.5 py-1.5 rounded-xl transition-all ${
-                        activeSub === sub
-                          ? 'bg-[#1B2A82] text-white shadow-sm'
-                          : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      {sub}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <section className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-sm font-black text-gray-800 uppercase tracking-wider">
-                  {activeSub ? `Subcategoría: ${activeSub}` : `Productos de ${categoryMeta.label}`}
-                </h2>
-                <span className="text-xs font-bold text-gray-500 bg-white px-3 py-1 rounded-full border border-gray-200">
-                  {products.length} productos
-                </span>
-              </div>
-
-              {isLoading ? (
-                <div className="py-12 text-center text-xs font-bold text-gray-500">
-                  Cargando productos de {categoryMeta.label}...
-                </div>
-              ) : products.length === 0 ? (
-                <div className="bg-white p-10 rounded-3xl text-center text-gray-500 font-medium border border-gray-200 space-y-3">
-                  <ShoppingBag className="w-10 h-10 text-gray-300 mx-auto" />
-                  <p className="text-sm font-bold text-gray-700">No hay productos registrados en esta sección aún.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  {products.map(product => {
-                    const tiers = product.price_tiers || []
-                    const baseTier = tiers.find((t: any) => t.min_quantity === 1) || tiers[0]
-                    const promoTier = tiers.find((t: any) => t.min_quantity > 1)
-
-                    const basePrice = baseTier ? baseTier.unit_price : 0
-                    const promoPrice = promoTier ? promoTier.unit_price : 0
-                    const promoMinQty = promoTier ? promoTier.min_quantity : 2
-
-                    return (
-                      <div
-                        key={product.id}
-                        className="bg-white rounded-3xl p-5 shadow-sm border border-gray-200 flex flex-col justify-between space-y-4 relative overflow-hidden"
-                      >
-                        <div className="aspect-square bg-slate-50 rounded-2xl p-4 flex items-center justify-center border border-gray-100 overflow-hidden">
-                          {product.image_url ? (
-                            <img src={product.image_url} alt={product.name} className="max-h-48 w-auto object-contain" />
-                          ) : (
-                            <span className="text-xs text-gray-400 font-bold">Producto Limpieza</span>
-                          )}
-                        </div>
-
-                        <div className="space-y-1">
-                          <span className="text-xs font-black tracking-wider text-[#1B2A82] uppercase block">
-                            {product.presentation}
-                          </span>
-                          <h3 className="text-base font-black text-gray-900 leading-snug">{product.name}</h3>
-                          {product.subcategory && (
-                            <span className="text-[10px] font-bold text-gray-500 bg-slate-100 px-2 py-0.5 rounded-md inline-block">
-                              {product.subcategory}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="bg-slate-50 p-3 rounded-2xl border border-gray-100 space-y-1 text-xs font-semibold">
-                          <div className="flex justify-between text-gray-700">
-                            <span>Precio 1 ud:</span>
-                            <span className="font-extrabold text-gray-900">S/ {basePrice?.toFixed(2)}</span>
-                          </div>
-                          {promoTier && (
-                            <div className="flex justify-between text-[#1B2A82] bg-blue-50 p-1.5 rounded-xl font-bold">
-                              <span>Desde {promoMinQty} uds:</span>
-                              <span className="font-black text-[#1B2A82]">S/ {promoPrice?.toFixed(2)} c/u</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {renderProductControls(product)}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </section>
+            <span className="text-xs font-bold text-gray-400 bg-slate-50 px-3 py-1.5 rounded-xl border border-gray-100 self-start sm:self-auto">
+              {filteredProducts.length} {filteredProducts.length === 1 ? 'producto' : 'productos'}
+            </span>
           </div>
-
-          {/* COLUMNA DERECHA: PRE-CUENTA LATERAL */}
-          <div className="lg:col-span-1">
-            <CartSidebar />
-          </div>
-
         </div>
+
+        {/* FILTROS DE SUBCATEGORÍA (PILLS) */}
+        {categoryInfo?.subcategories && categoryInfo.subcategories.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
+            <button
+              onClick={() => setSelectedSubcategory(null)}
+              className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
+                selectedSubcategory === null
+                  ? 'bg-[#1B2A82] text-white shadow-sm'
+                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-slate-50'
+              }`}
+            >
+              Todos
+            </button>
+            {categoryInfo.subcategories.map((sub) => (
+              <button
+                key={sub}
+                onClick={() => setSelectedSubcategory(sub)}
+                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
+                  selectedSubcategory === sub
+                    ? 'bg-[#1B2A82] text-white shadow-sm'
+                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-slate-50'
+                }`}
+              >
+                {sub}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* GRILLA DE PRODUCTOS (2 COLUMNAS EN CELULAR) */}
+        {isLoading ? (
+          <div className="py-20 text-center text-xs font-bold text-gray-400">
+            Cargando catálogo de {categoryInfo?.label || 'productos'}...
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="py-16 bg-white rounded-3xl text-center text-xs font-semibold text-gray-500 border border-gray-200 p-8 space-y-2">
+            <p className="font-bold text-gray-700">No hay productos disponibles en esta sección por el momento.</p>
+            <p>Revisa otras categorías o regresa a ver nuestras ofertas principales.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 w-full min-w-0">
+            {filteredProducts.map((product) => {
+              const qty = getItemQuantityInCart(product.id)
+              const tiers = product.price_tiers || []
+              const basePrice = calculateUnitPrice(tiers, 1)
+
+              const sortedTiers = [...tiers].sort((a: any, b: any) => b.min_quantity - a.min_quantity)
+              const bestTier = sortedTiers.find((t: any) => t.min_quantity > 1)
+
+              return (
+                <div
+                  key={product.id}
+                  className="bg-white rounded-2xl border border-gray-200/80 shadow-sm flex flex-col justify-between overflow-hidden hover:shadow-md transition-shadow w-full min-w-0"
+                >
+                  <div className="min-w-0">
+                    <div className="relative aspect-square w-full bg-slate-50 flex items-center justify-center p-2.5 sm:p-3 overflow-hidden">
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url}
+                          alt={product.name}
+                          className="max-h-full max-w-full object-contain"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <ShoppingBag className="w-8 h-8 text-gray-300" />
+                      )}
+
+                      {bestTier && (
+                        <div className="absolute top-2 left-2 bg-red-600 text-white font-black text-[9px] px-2 py-0.5 rounded-md shadow-sm">
+                          Lleva {bestTier.min_quantity}+ a S/ {Number(bestTier.unit_price).toFixed(2)}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-2.5 sm:p-3 space-y-1 min-w-0">
+                      <span className="text-[10px] font-black text-[#1B2A82] uppercase block truncate">
+                        {product.presentation || 'Limpieza'}
+                      </span>
+                      <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 leading-snug line-clamp-2 min-h-[2.5rem]">
+                        {product.name}
+                      </h3>
+
+                      <div className="pt-1 flex items-baseline gap-1.5">
+                        <span className="text-sm sm:text-base font-black text-gray-900">
+                          S/ {basePrice.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-semibold">c/u</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 sm:p-3 pt-0">
+                    {qty === 0 ? (
+                      <button
+                        onClick={() => addItem(product, 1)}
+                        className="w-full h-8 sm:h-9 bg-[#1B2A82] hover:bg-[#142066] text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Agregar</span>
+                      </button>
+                    ) : (
+                      <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl p-1">
+                        <button
+                          onClick={() => updateQuantity(product.id, qty - 1)}
+                          className="w-7 h-7 bg-white text-gray-800 rounded-lg flex items-center justify-center font-black shadow-sm active:scale-90 transition-transform"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="text-xs font-black text-[#1B2A82]">{qty}</span>
+                        <button
+                          onClick={() => updateQuantity(product.id, qty + 1)}
+                          className="w-7 h-7 bg-[#1B2A82] text-white rounded-lg flex items-center justify-center font-black shadow-sm active:scale-90 transition-transform"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </main>
+
+      {/* STICKY BOTTOM BAR */}
+      {totalCount > 0 && (
+        <aside
+          aria-label="Resumen de compra y acceso al carrito"
+          className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl p-3 z-50 animate-in slide-in-from-bottom-3 duration-200"
+        >
+          <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+            <div className="leading-tight">
+              <span className="text-[11px] font-bold text-gray-500 block">
+                {totalCount} {totalCount === 1 ? 'producto' : 'productos'} en carrito
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-base font-black text-gray-900">
+                  Total: S/ {finalTotal.toFixed(2)}
+                </span>
+                {totalDiscount > 0 && (
+                  <span className="text-[10px] font-extrabold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-md">
+                    -S/ {totalDiscount.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <Link
+              href="/carrito"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-5 py-3 rounded-2xl text-xs flex items-center gap-2 shadow-md active:scale-95 transition-all"
+            >
+              <span>Ver Carrito</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </aside>
+      )}
     </div>
+  )
+}
+
+export default function CategoriaPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-8">
+          <div className="text-xs font-bold text-gray-400">Cargando categoría...</div>
+        </div>
+      }
+    >
+      <CategoriaContent />
+    </Suspense>
   )
 }
