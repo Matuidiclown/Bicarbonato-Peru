@@ -68,7 +68,11 @@ export default function VendedoraPedidosPage() {
 
   // 1. Validar autenticación de sesión de la asesora
   useEffect(() => {
-    const rawSession = localStorage.getItem('vendedora_session')
+    // Compatibilidad para ambas claves
+    const rawSession =
+      localStorage.getItem('seller_session') ||
+      localStorage.getItem('vendedora_session')
+
     if (!rawSession) {
       router.push('/vendedora/login')
       return
@@ -162,8 +166,8 @@ export default function VendedoraPedidosPage() {
     setTimeout(() => setCopiedLink(false), 2500)
   }
 
-  // 6. Cerrar Sesión
   const handleLogout = () => {
+    localStorage.removeItem('seller_session')
     localStorage.removeItem('vendedora_session')
     router.push('/vendedora/login')
   }
