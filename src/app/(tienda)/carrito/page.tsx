@@ -115,8 +115,8 @@ export default function CarritoPage() {
     setIsSubmitting(true)
 
     try {
-      // 1. Asignación de Vendedora (Prioridad Enlace de Referido vs. Turno Rotativo Orgánico)
-      let rawSellerPhone = '924428558'
+      // 1. Asignación de Vendedora (Prioridad Enlace de Referido vs. Turno Rotativo Equitativo)
+      let rawSellerPhone = ''
       let assignedSellerId: string | null = null
 
       const referralCode = useCartStore.getState().referralCode
@@ -136,13 +136,13 @@ export default function CarritoPage() {
         }
       }
 
-      // B) Si no vino por enlace o el ref_code no existe/está inactivo: Turno Rotativo (Round-Robin)
+      // B) Turno Rotativo Orgánico (Round-Robin con nullsFirst: true)
       if (!assignedSellerId) {
-        const { data: sellers } = await supabase
+        const { data: sellers, error: sellersError } = await supabase
           .from('whatsapp_sellers')
           .select('id, phone_number')
           .eq('is_active', true)
-          .order('last_assigned_at', { ascending: true })
+          .order('last_assigned_at', { ascending: true, nullsFirst: true })
           .limit(1)
 
         if (sellers && sellers.length > 0) {
@@ -150,7 +150,7 @@ export default function CarritoPage() {
           assignedSellerId = assignedSeller.id
           rawSellerPhone = assignedSeller.phone_number
 
-          // Actualizar turno equitativo
+          // Actualizar marca de tiempo para avanzar el turno
           await supabase
             .from('whatsapp_sellers')
             .update({ last_assigned_at: new Date().toISOString() })
@@ -158,12 +158,17 @@ export default function CarritoPage() {
         }
       }
 
+      // Respaldo de emergencia si no hay vendedoras registradas en BD
+      if (!rawSellerPhone) {
+        rawSellerPhone = '924428558'
+      }
+
       // Normalizar número a formato internacional (51 + 9 dígitos)
       const cleanDigits = rawSellerPhone.replace(/\D/g, '')
       const nineDigits = cleanDigits.slice(-9)
       const sellerPhone = `51${nineDigits}`
 
-      // 2. Insertar orden en Supabase
+      // 2. Insertar orden principal en Supabase
       const { data: insertedOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -225,7 +230,7 @@ export default function CarritoPage() {
       const numCode = insertedOrder?.order_number || Math.floor(100 + Math.random() * 900)
       const orderCode = String(numCode).padStart(4, '0')
 
-      // 5. Construcción del mensaje usando los Emojis Unicode limpios
+      // 5. Construcción del mensaje con emojis limpios
       let message = `${EMOJI.DOC} *Pedido #${orderCode}*\n`
       message += `${EMOJI.USER} *${fullName.trim()}* | ${EMOJI.PHONE} *${phone.trim()}*\n`
       message += `${EMOJI.PIN} *${district}* - ${address.trim()}`
@@ -254,7 +259,7 @@ export default function CarritoPage() {
       }
       message += `\n(El costo de envío lo confirma la vendedora)`
 
-      // 6. Endpoint oficial directo sin redirección intermedia de wa.me
+      // 6. Redirección oficial directa sin desvío de wa.me
       const encodedMessage = encodeURIComponent(message)
       const whatsappUrl = `https://api.whatsapp.com/send?phone=${sellerPhone}&text=${encodedMessage}`
 
@@ -343,7 +348,6 @@ export default function CarritoPage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
           <div className="lg:col-span-7 space-y-4">
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-200 space-y-4">
               <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider pb-2 border-b border-gray-100 flex items-center justify-between">
@@ -529,7 +533,6 @@ export default function CarritoPage() {
                     Opcional: Detalles para ayudar al repartidor a ubicar tu domicilio rápidamente.
                   </p>
                 </div>
-
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-gray-200 space-y-2 text-xs font-semibold">
@@ -578,7 +581,6 @@ export default function CarritoPage() {
               </div>
             </form>
           </div>
-
         </div>
       </main>
     </div>

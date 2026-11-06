@@ -4,70 +4,119 @@ import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
+  ShoppingBag,
   Phone,
-  MapPin,
-  Clock,
-  RefreshCw,
-  LogOut,
+  MessageCircle,
   Copy,
   Check,
+  LogOut,
+  RefreshCw,
   Trash2,
-  AlertTriangle,
-  RotateCcw,
-  MessageCircle,
-  TrendingUp,
-  PackageCheck,
-  ShoppingBag
+  Clock,
+  CheckCircle2,
+  Truck,
+  XCircle,
+  Calendar,
+  AlertCircle
 } from 'lucide-react'
+
+interface OrderItem {
+  id: string
+  product_name: string
+  presentation: string
+  quantity: number
+  applied_unit_price: number
+  subtotal: number
+}
+
+interface Order {
+  id: string
+  order_number: number
+  created_at: string
+  customer_name: string
+  customer_phone: string
+  delivery_district: string
+  district_name?: string
+  delivery_address: string
+  address?: string
+  reference?: string
+  notes?: string
+  total_amount: number
+  status: 'pending' | 'confirmed' | 'dispatched' | 'cancelled'
+  seller_id: string | null
+  is_deleted: boolean
+  order_items: OrderItem[]
+}
+
+interface SellerSession {
+  id: string
+  name: string
+  phone_number: string
+  ref_code: string | null
+}
 
 export default function VendedoraPedidosPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  const [seller, setSeller] = useState<any>(null)
-  const [orders, setOrders] = useState<any[]>([])
+  const [seller, setSeller] = useState<SellerSession | null>(null)
+  const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [showTrash, setShowTrash] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<string>('all')
   const [copiedLink, setCopiedLink] = useState(false)
-  const [deleteModalOrder, setDeleteModalOrder] = useState<any | null>(null)
+  const [actionSuccess, setActionSuccess] = useState('')
 
-  // 1. Validar sesión de vendedora
+  // 1. Validar autenticación de sesión de la asesora
   useEffect(() => {
-    const sessionRaw = localStorage.getItem('seller_session')
-    if (!sessionRaw) {
+    const rawSession = localStorage.getItem('vendedora_session')
+    if (!rawSession) {
       router.push('/vendedora/login')
       return
     }
-    setSeller(JSON.parse(sessionRaw))
+
+    try {
+      const parsedSession: SellerSession = JSON.parse(rawSession)
+      if (!parsedSession.id) {
+        router.push('/vendedora/login')
+        return
+      }
+      setSeller(parsedSession)
+    } catch {
+      router.push('/vendedora/login')
+    }
   }, [router])
 
-  // 2. Cargar pedidos asignados a la vendedora
-  const fetchOrders = async () => {
-    if (!seller?.id) return
+  // 2. Cargar pedidos asignados a esta asesora
+  const fetchMyOrders = async (sellerId: string) => {
     setIsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*, order_items(*)')
+        .eq('seller_id', sellerId)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
 
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*, order_items(*)')
-      .eq('seller_id', seller.id)
-      .eq('is_deleted', showTrash)
-      .order('created_at', { ascending: false })
-
-    if (!error && data) {
-      setOrders(data)
+      if (error) {
+        console.error('Error al cargar pedidos:', error.message)
+      } else if (data) {
+        setOrders(data as Order[])
+      }
+    } catch (err) {
+      console.error('Error:', err)
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   useEffect(() => {
     if (seller?.id) {
-      fetchOrders()
+      fetchMyOrders(seller.id)
     }
-  }, [seller, showTrash])
+  }, [seller])
 
-  // 3. Manejo de estado del pedido
-  const handleUpdateStatus = async (orderId: string, newStatus: string) => {
+  // 3. Cambiar estado del pedido
+  const handleUpdateStatus = async (orderId: string, newStatus: Order['status']) => {
     const { error } = await supabase
       .from('orders')
       .update({ status: newStatus })
@@ -77,347 +126,299 @@ export default function VendedoraPedidosPage() {
       setOrders(prev =>
         prev.map(o => (o.id === orderId ? { ...o, status: newStatus } : o))
       )
+      setActionSuccess('Estado del pedido actualizado.')
+      setTimeout(() => setActionSuccess(''), 2500)
     }
   }
 
-  // 4. Mover a la papelera (Soft delete)
-  const confirmSoftDelete = async () => {
-    if (!deleteModalOrder) return
+  // 4. Mover a papelera temporal (30 días de retención)
+  const handleMoveToTrash = async (orderId: string, orderNumber: number) => {
+    const confirmDelete = confirm(
+      `¿Mover el Pedido #${String(orderNumber).padStart(4, '0')} a la papelera? Se conservará por 30 días.`
+    )
+    if (!confirmDelete) return
 
     const { error } = await supabase
       .from('orders')
-      .update({
-        is_deleted: true,
-        deleted_at: new Date().toISOString()
-      })
-      .eq('id', deleteModalOrder.id)
-
-    if (!error) {
-      setOrders(prev => prev.filter(o => o.id !== deleteModalOrder.id))
-      setDeleteModalOrder(null)
-    }
-  }
-
-  // 5. Restaurar pedido de la papelera
-  const handleRestoreOrder = async (orderId: string) => {
-    const { error } = await supabase
-      .from('orders')
-      .update({
-        is_deleted: false,
-        deleted_at: null
-      })
+      .update({ is_deleted: true })
       .eq('id', orderId)
 
     if (!error) {
       setOrders(prev => prev.filter(o => o.id !== orderId))
+      setActionSuccess('Pedido enviado a la papelera temporal.')
+      setTimeout(() => setActionSuccess(''), 2500)
     }
   }
 
-  // 6. Copiar enlace personalizado
-  const handleCopyLink = () => {
-    if (!seller?.ref_code) return
-    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://bicarbonatoperu.pe'
-    const sellerUrl = `${currentOrigin}/?ref=${seller.ref_code}`
+  // 5. Copiar enlace único de campaña
+  const handleCopyMyLink = () => {
+    if (!seller) return
+    const refCode = seller.ref_code || seller.name.toLowerCase().trim().replace(/\s+/g, '')
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bicarbonatoperu.pe'
+    const fullUrl = `${origin}/?ref=${refCode}`
 
-    navigator.clipboard.writeText(sellerUrl)
+    navigator.clipboard.writeText(fullUrl)
     setCopiedLink(true)
     setTimeout(() => setCopiedLink(false), 2500)
   }
 
-  // 7. Cerrar sesión
+  // 6. Cerrar Sesión
   const handleLogout = () => {
-    localStorage.removeItem('seller_session')
+    localStorage.removeItem('vendedora_session')
     router.push('/vendedora/login')
   }
 
-  // Cálculos de métricas
-  const totalConfirmedSales = orders
-    .filter(o => o.status === 'confirmed' || o.status === 'dispatched')
-    .reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0)
+  // Filtros y Métricas
+  const filteredOrders = filterStatus === 'all'
+    ? orders
+    : orders.filter(o => o.status === filterStatus)
 
+  const totalVentas = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
   const pendingCount = orders.filter(o => o.status === 'pending').length
 
-  const filteredOrders = statusFilter === 'all'
-    ? orders
-    : orders.filter(o => (o.status || '').toLowerCase() === statusFilter.toLowerCase())
-
-  if (!seller) return null
+  if (!seller) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="text-xs font-bold text-gray-500">Verificando sesión...</div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-slate-100 pb-16">
-      {/* HEADER DE LA VENDEDORA */}
+    <div className="min-h-screen bg-slate-100 flex flex-col pb-16">
+      {/* HEADER EXCLUSIVO VENDEDORA */}
       <header className="bg-[#1B2A82] text-white shadow-md sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center font-black text-sm">
-              {seller.name.charAt(0)}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-white text-[#1B2A82] rounded-2xl flex items-center justify-center font-black text-sm shadow-sm">
+              BP
             </div>
             <div>
-              <h1 className="text-sm font-black leading-none">{seller.name}</h1>
-              <span className="text-[10px] text-blue-200 font-semibold">
-                Asesora Comercial | Ref: <span className="font-mono text-amber-300">@{seller.ref_code}</span>
-              </span>
+              <span className="text-xs font-black block leading-none">Portal Comercial</span>
+              <span className="text-[11px] text-blue-200 font-bold block">{seller.name}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleCopyLink}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition-all"
+              onClick={() => fetchMyOrders(seller.id)}
+              className="p-2 text-blue-100 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+              title="Actualizar pedidos"
             >
-              {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedLink ? '¡Enlace Copiado!' : 'Mi Link de Ventas'}</span>
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
 
             <button
               onClick={handleLogout}
-              className="bg-red-500/80 hover:bg-red-600 text-white p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"
-              title="Cerrar Sesión"
+              className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-colors border border-white/10"
             >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Salir</span>
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cerrar Sesión</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* TARJETAS DE RENDIMIENTO */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="text-[11px] font-bold text-gray-400 block uppercase">Ventas Confirmadas</span>
-              <span className="text-xl font-black text-gray-900">S/ {totalConfirmedSales.toFixed(2)}</span>
-            </div>
+      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6 flex-1 w-full">
+        {/* BANNER DE BIENVENIDA Y LINK DE CAMPAÑA */}
+        <div className="bg-white rounded-3xl p-5 border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-lg font-black text-gray-900 leading-tight">
+              Mis Pedidos Asignados
+            </h1>
+            <p className="text-xs text-gray-500 font-semibold mt-0.5">
+              Aquí recibes los pedidos que entran por tu enlace de publicidad o por turno rotativo.
+            </p>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
-              <Clock className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="text-[11px] font-bold text-gray-400 block uppercase">Pendientes de Cierre</span>
-              <span className="text-xl font-black text-amber-600">{pendingCount} pedidos</span>
-            </div>
+          {/* BOTÓN COPIAR ENLACE PERSONALIZADO */}
+          <button
+            onClick={handleCopyMyLink}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 transition-all shadow-sm ${
+              copiedLink
+                ? 'bg-emerald-600 text-white'
+                : 'bg-blue-50 text-[#1B2A82] hover:bg-blue-100 border border-blue-200'
+            }`}
+          >
+            {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            <span>{copiedLink ? '¡Enlace Copiado!' : `Copiar mi link (?ref=${seller.ref_code || seller.name.toLowerCase()})`}</span>
+          </button>
+        </div>
+
+        {actionSuccess && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{actionSuccess}</span>
+          </div>
+        )}
+
+        {/* MÉTRICAS RÁPIDAS */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+            <span className="text-[10px] font-black uppercase text-gray-400 block tracking-wider">Total Ventas</span>
+            <span className="text-lg sm:text-xl font-black text-gray-900">S/ {totalVentas.toFixed(2)}</span>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-50 text-[#1B2A82] rounded-xl flex items-center justify-center">
-              <PackageCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="text-[11px] font-bold text-gray-400 block uppercase">Total Asignados</span>
-              <span className="text-xl font-black text-gray-900">{orders.length} pedidos</span>
-            </div>
+          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+            <span className="text-[10px] font-black uppercase text-gray-400 block tracking-wider">Total Pedidos</span>
+            <span className="text-lg sm:text-xl font-black text-[#1B2A82]">{orders.length}</span>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+            <span className="text-[10px] font-black uppercase text-gray-400 block tracking-wider">Por Atender</span>
+            <span className="text-lg sm:text-xl font-black text-amber-600">{pendingCount}</span>
           </div>
         </div>
 
-        {/* BARRA DE FILTROS Y ESTADOS */}
-        <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
-            {!showTrash ? (
-              [
-                { id: 'all', label: 'Todos' },
-                { id: 'pending', label: 'Pendientes' },
-                { id: 'confirmed', label: 'Confirmados' },
-                { id: 'dispatched', label: 'Despachados' },
-                { id: 'cancelled', label: 'Cancelados' }
-              ].map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setStatusFilter(f.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
-                    statusFilter === f.id
-                      ? 'bg-[#1B2A82] text-white shadow-sm'
-                      : 'bg-slate-100 text-gray-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))
-            ) : (
-              <span className="text-xs font-black text-red-600 uppercase flex items-center gap-1.5">
-                <Trash2 className="w-4 h-4" /> Papelera temporal (Autolimpieza en 30 días)
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+        {/* FILTROS POR ESTADO */}
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {[
+            { id: 'all', label: 'Todos' },
+            { id: 'pending', label: 'Pendientes' },
+            { id: 'confirmed', label: 'Confirmados' },
+            { id: 'dispatched', label: 'Despachados' },
+            { id: 'cancelled', label: 'Cancelados' }
+          ].map(f => (
             <button
-              onClick={() => {
-                setShowTrash(!showTrash)
-                setStatusFilter('all')
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all ${
-                showTrash
-                  ? 'bg-amber-500 text-white border-amber-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              key={f.id}
+              onClick={() => setFilterStatus(f.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all ${
+                filterStatus === f.id
+                  ? 'bg-[#1B2A82] text-white shadow-sm'
+                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-slate-50'
               }`}
             >
-              {showTrash ? 'Ver Pedidos Activos' : 'Papelera'}
+              {f.label}
             </button>
-
-            <button
-              onClick={fetchOrders}
-              className="p-2 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded-xl"
-              title="Actualizar pedidos"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+          ))}
         </div>
 
         {/* LISTADO DE PEDIDOS */}
         {isLoading ? (
-          <div className="bg-white p-12 rounded-3xl text-center text-xs font-bold text-gray-500">
+          <div className="py-16 text-center text-xs font-bold text-gray-400">
             Cargando tus pedidos...
           </div>
         ) : filteredOrders.length === 0 ? (
-          <div className="bg-white p-12 rounded-3xl text-center text-xs font-semibold text-gray-500 border border-gray-200">
-            {showTrash ? 'La papelera está vacía.' : 'No tienes pedidos en este estado.'}
+          <div className="bg-white rounded-3xl p-10 text-center text-xs font-semibold text-gray-500 border border-gray-200 space-y-2">
+            <ShoppingBag className="w-10 h-10 text-gray-300 mx-auto" />
+            <p className="font-bold text-gray-700">No hay pedidos registrados en este estado.</p>
+            <p>Comparte tu enlace de campaña en tus redes o WhatsApp para recibir ventas directas.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="space-y-4">
             {filteredOrders.map(order => {
-              const numCode = String(order.order_number || order.id.slice(0, 4)).padStart(4, '0')
-              const cleanPhone = (order.customer_phone || '').replace(/\D/g, '').slice(-9)
-              const waUrl = `https://wa.me/51${cleanPhone}?text=${encodeURIComponent(
-                `¡Hola ${order.customer_name}! Te saluda ${seller.name} de Bicarbonato Perú. Recibí tu pedido #${numCode} y te escribo para coordinar la entrega y despacho.`
+              const codeStr = String(order.order_number || 0).padStart(4, '0')
+              const rawCustPhone = (order.customer_phone || '').replace(/\D/g, '').slice(-9)
+              const waCustUrl = `https://api.whatsapp.com/send?phone=51${rawCustPhone}&text=${encodeURIComponent(
+                `Hola ${order.customer_name}, te saluda ${seller.name} de Bicarbonato Perú sobre tu pedido #${codeStr}.`
               )}`
 
               return (
                 <div
                   key={order.id}
-                  className="bg-white rounded-3xl p-5 border border-gray-200 shadow-sm flex flex-col justify-between space-y-4"
+                  className="bg-white rounded-3xl p-5 border border-gray-200/90 shadow-sm space-y-4 hover:shadow-md transition-shadow"
                 >
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-                      <span className="text-sm font-black text-[#1B2A82]">Pedido #{numCode}</span>
-                      <span className="text-[10px] font-semibold text-gray-400 flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        {new Date(order.created_at).toLocaleDateString('es-PE')}
+                  {/* CABECERA DEL PEDIDO */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-black text-sm bg-blue-50 text-[#1B2A82] px-2.5 py-1 rounded-xl border border-blue-200">
+                        #{codeStr}
+                      </span>
+                      <span className="text-xs text-gray-400 font-semibold flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {new Date(order.created_at).toLocaleString('es-PE', {
+                          dateStyle: 'short',
+                          timeStyle: 'short'
+                        })}
                       </span>
                     </div>
 
-                    <div className="space-y-1 text-xs">
-                      <h3 className="font-extrabold text-sm text-gray-900">{order.customer_name}</h3>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600 font-bold flex items-center gap-1">
-                          <Phone className="w-3.5 h-3.5 text-[#1B2A82]" />
-                          {order.customer_phone}
+                    {/* SELECTOR DE ESTADO */}
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={order.status}
+                        onChange={e => handleUpdateStatus(order.id, e.target.value as Order['status'])}
+                        className={`text-xs font-black px-3 py-1.5 rounded-xl border focus:outline-none ${
+                          order.status === 'pending'
+                            ? 'bg-amber-50 text-amber-800 border-amber-300'
+                            : order.status === 'confirmed'
+                            ? 'bg-blue-50 text-blue-800 border-blue-300'
+                            : order.status === 'dispatched'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : 'bg-red-50 text-red-800 border-red-300'
+                        }`}
+                      >
+                        <option value="pending">Pendiente</option>
+                        <option value="confirmed">Confirmado</option>
+                        <option value="dispatched">Despachado</option>
+                        <option value="cancelled">Cancelado</option>
+                      </select>
+
+                      <button
+                        onClick={() => handleMoveToTrash(order.id, order.order_number)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+                        title="Mover a papelera temporal"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* DATOS DEL CLIENTE Y CONTACTO */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-semibold">
+                    <div className="space-y-1">
+                      <span className="font-black text-gray-900 text-sm block">{order.customer_name}</span>
+                      <span className="text-gray-600 block">
+                        📍 {order.delivery_district || order.district_name} - {order.delivery_address || order.address}
+                      </span>
+                      {(order.reference || order.notes) && (
+                        <span className="text-gray-400 text-[11px] block italic">
+                          Ref: {order.reference || order.notes}
                         </span>
-
-                        <a
-                          href={waUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-sm"
-                        >
-                          <MessageCircle className="w-3 h-3" />
-                          <span>WhatsApp</span>
-                        </a>
-                      </div>
-
-                      <p className="text-gray-600 font-medium flex items-start gap-1 pt-1">
-                        <MapPin className="w-3.5 h-3.5 text-[#1B2A82] shrink-0 mt-0.5" />
-                        <span>{order.district_name || order.delivery_district} - {order.address || order.delivery_address}</span>
-                      </p>
-
-                      {(order.notes || order.reference) && (
-                        <p className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-xl mt-1 font-medium">
-                          Ref: {order.notes || order.reference}
-                        </p>
                       )}
                     </div>
 
-                    <div className="pt-2 border-t border-gray-100 space-y-1">
-                      <p className="text-[10px] font-black text-gray-400 uppercase">Detalle:</p>
-                      {order.order_items?.map((item: any) => (
-                        <div key={item.id} className="flex justify-between text-xs text-gray-700">
-                          <span>{item.quantity}x {item.product_name}</span>
-                          <span className="font-bold">S/ {Number(item.subtotal || 0).toFixed(2)}</span>
+                    <div className="flex flex-col sm:items-end justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-gray-800 text-sm">{order.customer_phone}</span>
+                        <a
+                          href={waCustUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition-all"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>Abrir WhatsApp</span>
+                        </a>
+                      </div>
+
+                      <span className="text-base font-black text-gray-900">
+                        Total: S/ {Number(order.total_amount).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* DESGLOSE DE PRODUCTOS COMPRADOS */}
+                  {order.order_items && order.order_items.length > 0 && (
+                    <div className="bg-slate-50 p-3 rounded-2xl border border-gray-100 text-xs space-y-1">
+                      <span className="text-[10px] font-black uppercase text-gray-400 block pb-1">
+                        Detalle de Productos:
+                      </span>
+                      {order.order_items.map((item, idx) => (
+                        <div key={item.id || idx} className="flex justify-between text-gray-700 font-medium">
+                          <span>
+                            • {item.quantity} x {item.product_name} ({item.presentation})
+                          </span>
+                          <span className="font-bold text-gray-900">
+                            S/ {Number(item.subtotal || item.applied_unit_price * item.quantity).toFixed(2)}
+                          </span>
                         </div>
                       ))}
                     </div>
-                  </div>
-
-                  <div className="pt-3 border-t border-gray-100 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-gray-500">Total a Cobrar:</span>
-                      <span className="text-base font-black text-emerald-700">
-                        S/ {Number(order.total_amount || 0).toFixed(2)}
-                      </span>
-                    </div>
-
-                    {!showTrash ? (
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={order.status || 'pending'}
-                          onChange={e => handleUpdateStatus(order.id, e.target.value)}
-                          className="flex-1 h-10 px-3 rounded-xl border border-gray-300 bg-white text-xs font-extrabold text-gray-800 focus:outline-none"
-                        >
-                          <option value="pending">🟡 Pendiente</option>
-                          <option value="confirmed">🔵 Confirmado</option>
-                          <option value="dispatched">🟢 Despachado</option>
-                          <option value="cancelled">🔴 Cancelado</option>
-                        </select>
-
-                        <button
-                          onClick={() => setDeleteModalOrder(order)}
-                          className="h-10 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border border-red-200 transition-colors"
-                          title="Mover a papelera"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleRestoreOrder(order.id)}
-                        className="w-full h-10 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 border border-emerald-200"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        <span>Restaurar a Activos</span>
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </div>
               )
             })}
-          </div>
-        )}
-
-        {/* MODAL CONFIRMACIÓN PAPELERA */}
-        {deleteModalOrder && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center">
-              <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="font-black text-gray-900 text-base">¿Mover pedido a la papelera?</h3>
-                <p className="text-xs text-gray-500 font-medium">
-                  El pedido de <span className="font-bold text-gray-800">{deleteModalOrder.customer_name}</span> se ocultará de tu lista activa y permanecerá en la papelera durante 30 días antes de su borrado definitivo.
-                </p>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => setDeleteModalOrder(null)}
-                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold text-xs rounded-xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmSoftDelete}
-                  className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-md"
-                >
-                  Sí, Mover
-                </button>
-              </div>
-            </div>
           </div>
         )}
       </main>
