@@ -2,13 +2,11 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import './globals.css'
 import { ReferralTracker } from '@/components/ReferralTracker'
+import { ModalProducto } from '@/components/tienda/ModalProducto'
 
 export const metadata: Metadata = {
   title: 'Bicarbonato Perú | Insumos y Productos de Limpieza al por Mayor y Menor',
-  description: 'Venta de bicarbonato de sodio, insumos químicos y productos de limpieza para el hogar y la industria en Lima, Perú.',
-  icons: {
-    icon: '/favicon.ico',
-  },
+  description: 'Venta de bicarbonato de sodio, percarbonato, detergentes y artículos de limpieza en Lima, Perú.',
 }
 
 export default function RootLayout({
@@ -22,6 +20,8 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <ReferralTracker />
         </Suspense>
+        {/* Modal global de detalle de producto */}
+        <ModalProducto />
         {children}
       </body>
     </html>

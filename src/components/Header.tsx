@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCartStore } from '@/store/useCartStore'
+import { useProductModalStore } from '@/store/useProductModalStore'
 import { createClient } from '@/lib/supabase/client'
 import {
   ShoppingBag,
@@ -88,6 +89,9 @@ export function Header({ activeCategory }: HeaderProps) {
   const items = useCartStore((state) => state.items)
   const addItem = useCartStore((state) => state.addItem)
   const totalCount = items.reduce((acc, i) => acc + i.quantity, 0)
+  
+  // Conexión con el Modal Flotante de detalle de producto
+  const openModal = useProductModalStore((state) => state.openModal)
 
   // Estados de navegación
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -130,7 +134,7 @@ export function Header({ activeCategory }: HeaderProps) {
     return () => clearTimeout(timeoutId)
   }, [searchQuery, supabase])
 
-  // Cerrar el buscador al hacer clic fuera del componente
+  // Cerrar el buscador al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -219,7 +223,11 @@ export function Header({ activeCategory }: HeaderProps) {
                     return (
                       <div
                         key={product.id}
-                        className="p-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3"
+                        onClick={() => {
+                          openModal(product)
+                          setShowSearchDropdown(false)
+                        }}
+                        className="p-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3 cursor-pointer"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-12 h-12 bg-slate-50 rounded-xl p-1.5 border border-gray-100 flex items-center justify-center shrink-0">
@@ -247,7 +255,8 @@ export function Header({ activeCategory }: HeaderProps) {
                         </div>
 
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation()
                             addItem(product, 1)
                             handleClearSearch()
                           }}
@@ -385,7 +394,11 @@ export function Header({ activeCategory }: HeaderProps) {
                   return (
                     <div
                       key={product.id}
-                      className="p-2.5 flex items-center justify-between gap-2"
+                      onClick={() => {
+                        openModal(product)
+                        setShowSearchDropdown(false)
+                      }}
+                      className="p-2.5 flex items-center justify-between gap-2 cursor-pointer active:bg-slate-100"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-10 h-10 bg-slate-50 rounded-lg p-1 border border-gray-100 flex items-center justify-center shrink-0">
@@ -410,11 +423,12 @@ export function Header({ activeCategory }: HeaderProps) {
                       </div>
 
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           addItem(product, 1)
                           handleClearSearch()
                         }}
-                        className="bg-[#1B2A82] text-white px-2.5 py-1.5 rounded-lg text-xs font-black flex items-center gap-1 shrink-0"
+                        className="bg-[#1B2A82] text-white px-2.5 py-1.5 rounded-lg text-xs font-black flex items-center gap-1 shrink-0 active:scale-95"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Agregar</span>
