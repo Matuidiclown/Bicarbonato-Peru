@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useCartStore } from '@/store/useCartStore'
+import { useProductModalStore } from '@/store/useProductModalStore'
 import { Header } from '@/components/Header'
 import {
   ShoppingBag,
@@ -13,7 +14,8 @@ import {
   Package,
   ArrowRight,
   ShieldCheck,
-  Truck
+  Truck,
+  Eye
 } from 'lucide-react'
 
 export default function TiendaPage() {
@@ -21,10 +23,15 @@ export default function TiendaPage() {
   const [products, setProducts] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  // Carrito Zustand
   const items = useCartStore((state) => state.items)
   const addItem = useCartStore((state) => state.addItem)
   const updateQuantity = useCartStore((state) => state.updateQuantity)
 
+  // Modal Flotante de Detalle
+  const openModal = useProductModalStore((state) => state.openModal)
+
+  // Cálculos reactivos de compra
   const { finalTotal, totalDiscount, totalCount } = useMemo(() => {
     let subtotalBase = 0
     let total = 0
@@ -69,7 +76,7 @@ export default function TiendaPage() {
     }
 
     loadCatalog()
-  }, [])
+  }, [supabase])
 
   const packProducts = products.filter(
     (p) => p.category === 'packs' || p.name.toLowerCase().includes('pack') || p.name.toLowerCase().includes('kit')
@@ -83,6 +90,7 @@ export default function TiendaPage() {
     return item ? item.quantity : 0
   }
 
+  // Tarjeta interactiva con soporte para abrir Modal
   const ProductCard = ({ product }: { product: any }) => {
     const qty = getItemQuantityInCart(product.id)
     const tiers = product.price_tiers || []
@@ -93,15 +101,21 @@ export default function TiendaPage() {
     const bestTier = sortedTiers.find((t: any) => t.min_quantity > 1)
 
     return (
-      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm flex flex-col justify-between overflow-hidden hover:shadow-md transition-shadow w-full min-w-0">
-        <div className="min-w-0">
+      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm flex flex-col justify-between overflow-hidden hover:shadow-md transition-shadow w-full min-w-0 group">
+        {/* Zona Táctil para abrir el detalle */}
+        <div
+          onClick={() => openModal(product)}
+          className="cursor-pointer select-none"
+          role="button"
+          tabIndex={0}
+        >
           {/* Imagen y Badge */}
           <div className="relative aspect-square w-full bg-slate-50 flex items-center justify-center p-2.5 sm:p-3 overflow-hidden">
             {product.image_url ? (
               <img
                 src={product.image_url}
                 alt={product.name}
-                className="max-h-full max-w-full object-contain"
+                className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-200"
                 loading="lazy"
               />
             ) : (
@@ -113,9 +127,13 @@ export default function TiendaPage() {
                 Lleva {bestTier.min_quantity}+ a S/ {Number(bestTier.unit_price).toFixed(2)}
               </div>
             )}
+
+            <span className="absolute bottom-2 right-2 bg-slate-900/60 text-white p-1 rounded-md opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+              <Eye className="w-3.5 h-3.5" />
+            </span>
           </div>
 
-          {/* Información */}
+          {/* Información del Producto */}
           <div className="p-2.5 sm:p-3 space-y-1 min-w-0">
             <span className="text-[10px] font-black text-[#1B2A82] uppercase block truncate">
               {product.presentation || 'Limpieza'}
@@ -133,11 +151,14 @@ export default function TiendaPage() {
           </div>
         </div>
 
-        {/* Botones de Acción */}
+        {/* Botones de Acción (Carrito rápido) */}
         <div className="p-2.5 sm:p-3 pt-0">
           {qty === 0 ? (
             <button
-              onClick={() => addItem(product, 1)}
+              onClick={(e) => {
+                e.stopPropagation()
+                addItem(product, 1)
+              }}
               className="w-full h-8 sm:h-9 bg-[#1B2A82] hover:bg-[#142066] text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -146,14 +167,20 @@ export default function TiendaPage() {
           ) : (
             <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl p-1">
               <button
-                onClick={() => updateQuantity(product.id, qty - 1)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  updateQuantity(product.id, qty - 1)
+                }}
                 className="w-7 h-7 bg-white text-gray-800 rounded-lg flex items-center justify-center font-black shadow-sm active:scale-90 transition-transform"
               >
                 <Minus className="w-3 h-3" />
               </button>
               <span className="text-xs font-black text-[#1B2A82]">{qty}</span>
               <button
-                onClick={() => updateQuantity(product.id, qty + 1)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  updateQuantity(product.id, qty + 1)
+                }}
                 className="w-7 h-7 bg-[#1B2A82] text-white rounded-lg flex items-center justify-center font-black shadow-sm active:scale-90 transition-transform"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -194,7 +221,7 @@ export default function TiendaPage() {
           </div>
         </div>
 
-        {/* Sección: Packs y Combos */}
+        {/* Sección 1: Packs y Combos */}
         {packProducts.length > 0 && (
           <section className="space-y-3 w-full min-w-0">
             <div className="flex items-center justify-between">
@@ -207,7 +234,6 @@ export default function TiendaPage() {
               </Link>
             </div>
 
-            {/* CARRUSEL QUE HACE SCROLL DENTRO DE SÍ MISMO SIN ESTIRAR LA PÁGINA */}
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory w-full min-w-0 touch-pan-x">
               {packProducts.map((p) => (
                 <div key={p.id} className="w-[155px] sm:w-[190px] shrink-0 snap-start">
@@ -218,7 +244,7 @@ export default function TiendaPage() {
           </section>
         )}
 
-        {/* Sección: Grilla Móvil (2 Columnas reales por pantalla) */}
+        {/* Sección 2: Catálogo de Productos */}
         <section className="space-y-3 w-full min-w-0">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
@@ -252,7 +278,7 @@ export default function TiendaPage() {
       {totalCount > 0 && (
         <aside
           aria-label="Resumen de compra y acceso al carrito"
-          className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl p-3 z-50 animate-in slide-in-from-bottom-3 duration-200"
+          className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl p-3 z-30 animate-in slide-in-from-bottom-3 duration-200"
         >
           <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
             <div className="leading-tight">
