@@ -44,6 +44,10 @@ next-env.d.ts
 .env*.local
 .env
 
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
 # Dependencias y carpetas de compilación
 node_modules/
 .next/
