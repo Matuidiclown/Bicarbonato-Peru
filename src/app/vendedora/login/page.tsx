@@ -3,15 +3,15 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Lock, Phone, UserCheck, AlertCircle } from 'lucide-react'
+import { Lock, Mail, UserCheck, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
 export default function VendedoraLoginPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  const [identifier, setIdentifier] = useState('')
-  const [pin, setPin] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -21,41 +21,26 @@ export default function VendedoraLoginPage() {
     setIsLoading(true)
 
     try {
-      const cleanInput = identifier.trim().toLowerCase()
-      const cleanPin = pin.trim()
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
 
-      // Buscar coincidencia por ref_code o por número de teléfono
-      const { data: seller, error } = await supabase
-        .from('whatsapp_sellers')
-        .select('*')
-        .or(`ref_code.eq.${cleanInput},phone_number.ilike.%${cleanInput}%`)
-        .eq('is_active', true)
-        .maybeSingle()
-
-      if (error || !seller) {
-        setErrorMessage('Vendedora no encontrada o inactiva en el sistema.')
-        setIsLoading(false)
+      if (error || !data.user) {
+        setErrorMessage('Correo o contraseña incorrectos.')
         return
       }
 
-      // Validar PIN (si no tiene PIN asignado, el por defecto es 1234)
-      const validPin = seller.pin || '1234'
-      if (cleanPin !== validPin) {
-        setErrorMessage('El PIN ingresado es incorrecto.')
-        setIsLoading(false)
+      // Solo las cuentas marcadas como vendedora pueden entrar a este portal.
+      if (data.user.app_metadata?.role !== 'seller') {
+        await supabase.auth.signOut()
+        setErrorMessage('Esta cuenta no tiene acceso al portal de ventas.')
         return
       }
-
-      // Guardar sesión en localStorage para persistencia móvil
-      localStorage.setItem('seller_session', JSON.stringify({
-        id: seller.id,
-        name: seller.name,
-        phone_number: seller.phone_number,
-        ref_code: seller.ref_code
-      }))
 
       router.push('/vendedora/pedidos')
-    } catch (err: any) {
+      router.refresh()
+    } catch (err) {
       console.error('Error login vendedora:', err)
       setErrorMessage('Ocurrió un error al verificar credenciales.')
     } finally {
@@ -86,38 +71,39 @@ export default function VendedoraLoginPage() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">
-              Código de Asesora o Celular *
+              Correo electrónico *
             </label>
             <div className="relative">
-              <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+              <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
               <input
-                type="text"
+                type="email"
                 required
-                value={identifier}
-                onChange={e => setIdentifier(e.target.value)}
-                placeholder="Ej. gabriel o 924428558"
+                autoComplete="username"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="tucorreo@ejemplo.com"
                 className="w-full h-11 pl-10 pr-3 rounded-xl border border-gray-300 text-xs font-bold text-gray-900 bg-white focus:outline-none focus:border-[#1B2A82] focus:ring-2 focus:ring-[#1B2A82]/20"
               />
             </div>
             <p className="text-[10px] text-gray-400 mt-1">
-              Ingresa tu nombre de enlace (ref_code) o tu número de WhatsApp.
+              Usa el correo con el que te creó tu acceso el administrador.
             </p>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">
-              PIN de Acceso *
+              Contraseña *
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
               <input
                 type="password"
                 required
-                maxLength={6}
-                value={pin}
-                onChange={e => setPin(e.target.value)}
-                placeholder="••••"
-                className="w-full h-11 pl-10 pr-3 rounded-xl border border-gray-300 text-xs font-bold text-gray-900 bg-white tracking-widest focus:outline-none focus:border-[#1B2A82] focus:ring-2 focus:ring-[#1B2A82]/20"
+                autoComplete="current-password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full h-11 pl-10 pr-3 rounded-xl border border-gray-300 text-xs font-bold text-gray-900 bg-white focus:outline-none focus:border-[#1B2A82] focus:ring-2 focus:ring-[#1B2A82]/20"
               />
             </div>
           </div>
@@ -125,7 +111,7 @@ export default function VendedoraLoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full h-12 bg-[#1B2A82] hover:bg-[#142066] text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2"
+            className="w-full h-12 bg-[#1B2A82] hover:bg-[#142066] text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {isLoading ? 'Verificando...' : 'Ingresar a mi Panel'}
           </button>

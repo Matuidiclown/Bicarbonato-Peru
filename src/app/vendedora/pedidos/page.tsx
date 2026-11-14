@@ -62,29 +62,36 @@ export default function VendedoraPedidosPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [copiedLink, setCopiedLink] = useState(false)
   const [actionSuccess, setActionSuccess] = useState('')
+  const [actionError, setActionError] = useState('')
 
-  // 1. Validar autenticación de sesión de la asesora
+  // 1. Validar la sesión real de Supabase Auth y cargar el perfil de la asesora
   useEffect(() => {
-    // Compatibilidad para ambas claves
-    const rawSession =
-      localStorage.getItem('seller_session') ||
-      localStorage.getItem('vendedora_session')
+    const loadSeller = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      const sellerId = user?.app_metadata?.seller_id
 
-    if (!rawSession) {
-      router.push('/vendedora/login')
-      return
-    }
-
-    try {
-      const parsedSession: SellerSession = JSON.parse(rawSession)
-      if (!parsedSession.id) {
+      if (!user || user.app_metadata?.role !== 'seller' || !sellerId) {
         router.push('/vendedora/login')
         return
       }
-      setSeller(parsedSession)
-    } catch {
-      router.push('/vendedora/login')
+
+      const { data: profile, error } = await supabase
+        .from('whatsapp_sellers')
+        .select('id, name, phone_number, ref_code')
+        .eq('id', sellerId)
+        .maybeSingle()
+
+      if (error || !profile) {
+        router.push('/vendedora/login')
+        return
+      }
+
+      setSeller(profile as SellerSession)
     }
+
+    loadSeller()
   }, [router])
 
   // 2. Cargar pedidos asignados a esta asesora
@@ -118,18 +125,23 @@ export default function VendedoraPedidosPage() {
 
   // 3. Cambiar estado del pedido
   const handleUpdateStatus = async (orderId: string, newStatus: Order['status']) => {
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: newStatus })
-      .eq('id', orderId)
+    setActionError('')
+    const { error } = await supabase.rpc('seller_set_order_status', {
+      p_order_id: orderId,
+      p_status: newStatus,
+    })
 
-    if (!error) {
-      setOrders(prev =>
-        prev.map(o => (o.id === orderId ? { ...o, status: newStatus } : o))
-      )
-      setActionSuccess('Estado del pedido actualizado.')
-      setTimeout(() => setActionSuccess(''), 2500)
+    if (error) {
+      setActionError('No se pudo actualizar el estado. Intenta de nuevo.')
+      setTimeout(() => setActionError(''), 3500)
+      return
     }
+
+    setOrders(prev =>
+      prev.map(o => (o.id === orderId ? { ...o, status: newStatus } : o))
+    )
+    setActionSuccess('Estado del pedido actualizado.')
+    setTimeout(() => setActionSuccess(''), 2500)
   }
 
   // 4. Mover a papelera temporal (30 días de retención)
@@ -139,16 +151,20 @@ export default function VendedoraPedidosPage() {
     )
     if (!confirmDelete) return
 
-    const { error } = await supabase
-      .from('orders')
-      .update({ is_deleted: true })
-      .eq('id', orderId)
+    setActionError('')
+    const { error } = await supabase.rpc('seller_trash_order', {
+      p_order_id: orderId,
+    })
 
-    if (!error) {
-      setOrders(prev => prev.filter(o => o.id !== orderId))
-      setActionSuccess('Pedido enviado a la papelera temporal.')
-      setTimeout(() => setActionSuccess(''), 2500)
+    if (error) {
+      setActionError('No se pudo mover el pedido a la papelera. Intenta de nuevo.')
+      setTimeout(() => setActionError(''), 3500)
+      return
     }
+
+    setOrders(prev => prev.filter(o => o.id !== orderId))
+    setActionSuccess('Pedido enviado a la papelera temporal.')
+    setTimeout(() => setActionSuccess(''), 2500)
   }
 
   // 5. Copiar enlace único de campaña
@@ -163,10 +179,10 @@ export default function VendedoraPedidosPage() {
     setTimeout(() => setCopiedLink(false), 2500)
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('seller_session')
-    localStorage.removeItem('vendedora_session')
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
     router.push('/vendedora/login')
+    router.refresh()
   }
 
   // Filtros y Métricas
@@ -250,6 +266,13 @@ export default function VendedoraPedidosPage() {
           <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{actionSuccess}</span>
+          </div>
+        )}
+
+        {actionError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-2xl flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{actionError}</span>
           </div>
         )}
 
