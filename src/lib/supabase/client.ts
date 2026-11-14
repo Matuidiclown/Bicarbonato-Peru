@@ -1,20 +1,19 @@
+
 import { createBrowserClient } from '@supabase/ssr'
 
-let hasWarnedMissingEnv = false
-
 export function createClient() {
-  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
-  const rawAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
 
-  if ((!rawUrl || !rawAnonKey) && !hasWarnedMissingEnv) {
-    hasWarnedMissingEnv = true
-    console.warn(
-      '[Supabase] Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY. Usando valores de respaldo para compilación.'
+  // Compatible con Publishable Key y Anon Key
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      'Configuración incompleta: verifica NEXT_PUBLIC_SUPABASE_URL y tu clave pública de Supabase en .env.local'
     )
   }
 
-  const supabaseUrl = rawUrl || 'https://placeholder.supabase.co'
-  const supabaseAnonKey = rawAnonKey || 'placeholder-anon-key'
-
-  return createBrowserClient(supabaseUrl, supabaseAnonKey)
+  return createBrowserClient(supabaseUrl, supabaseKey)
 }

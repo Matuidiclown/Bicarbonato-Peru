@@ -11,9 +11,7 @@ import {
   Plus,
   Minus,
   ArrowLeft,
-  ArrowRight,
-  Layers,
-  Sparkles
+  ArrowRight
 } from 'lucide-react'
 
 function CategoriaContent() {
@@ -25,7 +23,7 @@ function CategoriaContent() {
   const slug = (params?.slug as string) || ''
   const subcategoryParam = searchParams.get('sub')
 
-  const categoryInfo = CATALOG_CATEGORIES.find((c) => c.slug === slug)
+  const categoryInfo = CATALOG_CATEGORIES.find((c) => c.slug === slug || c.id === slug)
 
   const [products, setProducts] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -166,7 +164,7 @@ function CategoriaContent() {
           </div>
         )}
 
-        {/* GRILLA DE PRODUCTOS (2 COLUMNAS EN CELULAR) */}
+        {/* GRILLA DE PRODUCTOS */}
         {isLoading ? (
           <div className="py-20 text-center text-xs font-bold text-gray-400">
             Cargando catálogo de {categoryInfo?.label || 'productos'}...
