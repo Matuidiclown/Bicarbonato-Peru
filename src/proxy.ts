@@ -2,18 +2,27 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Guardia de rutas /admin/* (Paso 5.2).
-// Next.js 16: este archivo reemplaza al antiguo "middleware".
-// Es una capa de comodidad: la protección real de los datos son las políticas RLS.
+// Guardia de rutas (Pasos 5 y 6):
+//  - /admin/*      exige sesion con app_metadata.role = 'admin'
+//  - /vendedora/*  exige sesion con app_metadata.role = 'seller'
+// Es una capa de comodidad: la proteccion real de los datos son las politicas RLS.
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // La página de login debe poder abrirse sin sesión.
-  if (pathname === '/admin/login') {
+  const isAdminArea = pathname === '/admin' || pathname.startsWith('/admin/')
+  const isSellerArea = pathname === '/vendedora' || pathname.startsWith('/vendedora/')
+
+  if (!isAdminArea && !isSellerArea) {
     return NextResponse.next()
   }
 
-  const loginUrl = new URL('/admin/login', request.url)
+  // Las paginas de login deben poder abrirse sin sesion.
+  if (pathname === '/admin/login' || pathname === '/vendedora/login') {
+    return NextResponse.next()
+  }
+
+  const requiredRole = isAdminArea ? 'admin' : 'seller'
+  const loginUrl = new URL(isAdminArea ? '/admin/login' : '/vendedora/login', request.url)
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
   // Mismo criterio que src/lib/supabase/client.ts: acepta Publishable Key o Anon Key.
@@ -43,16 +52,16 @@ export async function proxy(request: NextRequest) {
     },
   })
 
-  // getUser() valida la sesión contra el servidor de Supabase (no confía solo en la cookie).
+  // getUser() valida la sesion contra el servidor de Supabase (no confia solo en la cookie).
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const isAdmin = user?.app_metadata?.role === 'admin'
+  const hasAccess = !!user && user.app_metadata?.role === requiredRole
 
-  if (!user || !isAdmin) {
+  if (!hasAccess) {
     const redirect = NextResponse.redirect(loginUrl)
-    // Conserva cualquier cookie de sesión refrescada.
+    // Conserva cualquier cookie de sesion refrescada.
     response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie))
     return redirect
   }
@@ -61,5 +70,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: ['/admin/:path*', '/vendedora/:path*'],
 }
