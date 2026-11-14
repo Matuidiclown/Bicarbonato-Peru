@@ -15,7 +15,8 @@ import {
   Layers,
   Search,
   Plus,
-  Loader2
+  Loader2,
+  Check
 } from 'lucide-react'
 
 // Estructura oficial de categorías compartida con /categoria/[slug]
@@ -89,7 +90,7 @@ export function Header({ activeCategory }: HeaderProps) {
   const items = useCartStore((state) => state.items)
   const addItem = useCartStore((state) => state.addItem)
   const totalCount = items.reduce((acc, i) => acc + i.quantity, 0)
-  
+
   // Conexión con el Modal Flotante de detalle de producto
   const openModal = useProductModalStore((state) => state.openModal)
 
@@ -102,7 +103,9 @@ export function Header({ activeCategory }: HeaderProps) {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [showSearchDropdown, setShowSearchDropdown] = useState(false)
-  const searchContainerRef = useRef<HTMLDivElement>(null)
+  const [justAddedId, setJustAddedId] = useState<string | null>(null)
+  const desktopSearchRef = useRef<HTMLDivElement>(null)
+  const mobileSearchRef = useRef<HTMLDivElement>(null)
 
   // Debounce para consultar en Supabase al escribir
   useEffect(() => {
@@ -134,13 +137,14 @@ export function Header({ activeCategory }: HeaderProps) {
     return () => clearTimeout(timeoutId)
   }, [searchQuery, supabase])
 
-  // Cerrar el buscador al hacer clic fuera
+  // Cerrar el buscador solo si se toca fuera de AMBOS contenedores (escritorio y móvil)
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        searchContainerRef.current &&
-        !searchContainerRef.current.contains(event.target as Node)
-      ) {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node
+      const insideDesktop = desktopSearchRef.current?.contains(target)
+      const insideMobile = mobileSearchRef.current?.contains(target)
+
+      if (!insideDesktop && !insideMobile) {
         setShowSearchDropdown(false)
       }
     }
@@ -161,6 +165,20 @@ export function Header({ activeCategory }: HeaderProps) {
     setShowSearchDropdown(false)
   }
 
+  const handleOpenProductDetail = (product: any) => {
+    setShowSearchDropdown(false)
+    openModal(product)
+  }
+
+  const handleQuickAdd = (e: React.MouseEvent, product: any) => {
+    e.stopPropagation()
+    addItem(product, 1)
+    setJustAddedId(product.id)
+    setTimeout(() => {
+      setJustAddedId(null)
+    }, 800)
+  }
+
   return (
     <header className="bg-[#1B2A82] text-white sticky top-0 z-40 shadow-md w-full max-w-full">
       {/* BARRA PRINCIPAL SUPERIOR */}
@@ -174,7 +192,7 @@ export function Header({ activeCategory }: HeaderProps) {
         </Link>
 
         {/* BUSCADOR EN VIVO (ESCRITORIO / TABLET) */}
-        <div ref={searchContainerRef} className="relative flex-1 max-w-md hidden sm:block">
+        <div ref={desktopSearchRef} className="relative flex-1 max-w-md hidden sm:block">
           <div className="relative">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3 pointer-events-none" />
             <input
@@ -192,6 +210,7 @@ export function Header({ activeCategory }: HeaderProps) {
               <Loader2 className="w-4 h-4 text-gray-400 animate-spin absolute right-3 top-3" />
             ) : searchQuery ? (
               <button
+                type="button"
                 onClick={handleClearSearch}
                 className="absolute right-3 top-2.5 p-0.5 text-gray-400 hover:text-gray-600 rounded-full"
                 aria-label="Limpiar búsqueda"
@@ -211,7 +230,7 @@ export function Header({ activeCategory }: HeaderProps) {
                 </div>
               ) : searchResults.length === 0 ? (
                 <div className="p-6 text-center text-xs font-semibold text-gray-500">
-                  No encontramos productos con "{searchQuery}".
+                  No encontramos productos con &quot;{searchQuery}&quot;.
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
@@ -219,14 +238,12 @@ export function Header({ activeCategory }: HeaderProps) {
                     const tiers = product.price_tiers || []
                     const baseTier = tiers.find((t: any) => t.min_quantity === 1) || tiers[0]
                     const price = baseTier ? Number(baseTier.unit_price) : 0
+                    const isAdded = justAddedId === product.id
 
                     return (
                       <div
                         key={product.id}
-                        onClick={() => {
-                          openModal(product)
-                          setShowSearchDropdown(false)
-                        }}
+                        onClick={() => handleOpenProductDetail(product)}
                         className="p-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3 cursor-pointer"
                       >
                         <div className="flex items-center gap-3 min-w-0">
@@ -255,15 +272,16 @@ export function Header({ activeCategory }: HeaderProps) {
                         </div>
 
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            addItem(product, 1)
-                            handleClearSearch()
-                          }}
-                          className="bg-[#1B2A82] hover:bg-[#142066] text-white px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow-sm shrink-0 active:scale-95 transition-all"
+                          type="button"
+                          onClick={(e) => handleQuickAdd(e, product)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow-sm shrink-0 active:scale-95 transition-all ${
+                            isAdded
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-[#1B2A82] hover:bg-[#142066] text-white'
+                          }`}
                         >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Agregar</span>
+                          {isAdded ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                          <span>{isAdded ? 'Listo' : 'Agregar'}</span>
                         </button>
                       </div>
                     )
@@ -283,6 +301,7 @@ export function Header({ activeCategory }: HeaderProps) {
           {/* DROPDOWN CATEGORÍAS */}
           <div className="relative">
             <button
+              type="button"
               onClick={() => setDropdownOpen(!dropdownOpen)}
               onMouseEnter={() => setDropdownOpen(true)}
               className="flex items-center gap-1 hover:text-blue-200 transition-colors focus:outline-none"
@@ -305,6 +324,7 @@ export function Header({ activeCategory }: HeaderProps) {
                 </div>
                 {CATALOG_CATEGORIES.map((cat) => (
                   <button
+                    type="button"
                     key={cat.id}
                     onClick={() => handleNavigateCategory(cat.slug)}
                     className={`w-full text-left px-4 py-2 text-xs font-bold hover:bg-blue-50 hover:text-[#1B2A82] flex items-center gap-2 transition-colors ${
@@ -338,6 +358,7 @@ export function Header({ activeCategory }: HeaderProps) {
           </Link>
 
           <button
+            type="button"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="lg:hidden p-2 text-white hover:bg-[#142066] rounded-xl transition-colors"
             aria-label="Abrir menú"
@@ -347,8 +368,8 @@ export function Header({ activeCategory }: HeaderProps) {
         </div>
       </div>
 
-      {/* BUSCADOR EXCLUSIVO PARA MÓVILES (FILA DEDICADA) */}
-      <div className="sm:hidden px-3 pb-2.5 pt-0.5">
+      {/* BUSCADOR EXCLUSIVO PARA MÓVILES (FILA DEDICADA CON REF PROPIA) */}
+      <div ref={mobileSearchRef} className="sm:hidden px-3 pb-2.5 pt-0.5">
         <div className="relative">
           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5 pointer-events-none" />
           <input
@@ -362,14 +383,18 @@ export function Header({ activeCategory }: HeaderProps) {
             placeholder="Buscar productos de limpieza..."
             className="w-full h-9 pl-9 pr-8 rounded-xl bg-white text-gray-900 placeholder:text-gray-400 text-xs font-semibold focus:outline-none shadow-inner"
           />
-          {searchQuery && (
+          {isSearching ? (
+            <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin absolute right-2.5 top-2.5" />
+          ) : searchQuery ? (
             <button
+              type="button"
               onClick={handleClearSearch}
               className="absolute right-2.5 top-2 p-0.5 text-gray-400 rounded-full"
+              aria-label="Limpiar búsqueda"
             >
               <X className="w-3.5 h-3.5" />
             </button>
-          )}
+          ) : null}
         </div>
 
         {/* RESULTADOS FLOTANTES EN MÓVIL */}
@@ -382,7 +407,7 @@ export function Header({ activeCategory }: HeaderProps) {
               </div>
             ) : searchResults.length === 0 ? (
               <div className="p-4 text-center text-xs font-semibold text-gray-500">
-                No hay coincidencias para "{searchQuery}".
+                No hay coincidencias para &quot;{searchQuery}&quot;.
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
@@ -390,14 +415,12 @@ export function Header({ activeCategory }: HeaderProps) {
                   const tiers = product.price_tiers || []
                   const baseTier = tiers.find((t: any) => t.min_quantity === 1) || tiers[0]
                   const price = baseTier ? Number(baseTier.unit_price) : 0
+                  const isAdded = justAddedId === product.id
 
                   return (
                     <div
                       key={product.id}
-                      onClick={() => {
-                        openModal(product)
-                        setShowSearchDropdown(false)
-                      }}
+                      onClick={() => handleOpenProductDetail(product)}
                       className="p-2.5 flex items-center justify-between gap-2 cursor-pointer active:bg-slate-100"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -423,15 +446,16 @@ export function Header({ activeCategory }: HeaderProps) {
                       </div>
 
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          addItem(product, 1)
-                          handleClearSearch()
-                        }}
-                        className="bg-[#1B2A82] text-white px-2.5 py-1.5 rounded-lg text-xs font-black flex items-center gap-1 shrink-0 active:scale-95"
+                        type="button"
+                        onClick={(e) => handleQuickAdd(e, product)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-black flex items-center gap-1 shrink-0 active:scale-95 transition-all ${
+                          isAdded
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-[#1B2A82] text-white'
+                        }`}
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Agregar</span>
+                        {isAdded ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        <span>{isAdded ? 'Listo' : 'Agregar'}</span>
                       </button>
                     </div>
                   )
@@ -454,6 +478,7 @@ export function Header({ activeCategory }: HeaderProps) {
 
         {CATALOG_CATEGORIES.map((cat) => (
           <button
+            type="button"
             key={cat.id}
             onClick={() => handleNavigateCategory(cat.slug)}
             className={`shrink-0 text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1 border active:scale-95 transition-all ${

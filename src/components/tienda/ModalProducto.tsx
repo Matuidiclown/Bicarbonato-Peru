@@ -11,13 +11,21 @@ export function ModalProducto() {
   const [quantity, setQuantity] = useState(1)
   const [addedAnimation, setAddedAnimation] = useState(false)
 
-  // Resetear cantidad cada vez que se abre un producto diferente
+  // Permitir cerrar con la tecla Escape en PC
   useEffect(() => {
-    if (isOpen) {
-      setQuantity(1)
-      setAddedAnimation(false)
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeModal()
     }
-  }, [isOpen, selectedProduct])
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, closeModal])
+
+  const handleClose = () => {
+    setQuantity(1)
+    setAddedAnimation(false)
+    closeModal()
+  }
 
   if (!isOpen || !selectedProduct) return null
 
@@ -33,37 +41,43 @@ export function ModalProducto() {
     addItem(selectedProduct, quantity)
     setAddedAnimation(true)
     setTimeout(() => {
-      setAddedAnimation(false)
-      closeModal()
+      handleClose()
     }, 700)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      {/* Fondo oscuro para cerrar al hacer clic afuera */}
-      <div className="absolute inset-0" onClick={closeModal} />
+    <div
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200"
+      role="dialog"
+      aria-modal="true"
+      aria-label={selectedProduct.name}
+    >
+      {/* Fondo oscuro para cerrar al tocar afuera */}
+      <div className="fixed inset-0" onClick={handleClose} />
 
       {/* Tarjeta Flotante (Bottom Sheet en Celular / Modal en Desktop) */}
-      <div className="relative w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden z-10 max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-200">
+      <div className="relative w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden z-[110] max-h-[88dvh] flex flex-col animate-in slide-in-from-bottom duration-200">
         
-        {/* Cabecera con botón de cerrar */}
-        <div className="sticky top-0 bg-white/95 backdrop-blur-sm px-5 py-3.5 border-b border-gray-100 flex items-center justify-between z-20">
-          <span className="text-[11px] font-black uppercase tracking-wider text-[#1B2A82] bg-blue-50 px-2.5 py-1 rounded-lg">
+        {/* Cabecera fija con botón de cerrar grande y visible */}
+        <div className="shrink-0 bg-white px-5 py-3.5 border-b border-gray-200 flex items-center justify-between gap-3">
+          <span className="text-[11px] font-black uppercase tracking-wider text-[#1B2A82] bg-blue-50 px-2.5 py-1 rounded-lg truncate">
             {selectedProduct.presentation || 'Detalle del Producto'}
           </span>
           <button
-            onClick={closeModal}
-            className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            type="button"
+            onClick={handleClose}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-gray-800 border border-slate-200 text-xs font-extrabold transition-colors"
             aria-label="Cerrar ventana"
           >
-            <X className="w-5 h-5" />
+            <span>Cerrar</span>
+            <X className="w-4 h-4 stroke-[2.5]" />
           </button>
         </div>
 
         {/* Contenido con scroll interno */}
-        <div className="overflow-y-auto p-5 space-y-5">
+        <div className="overflow-y-auto p-5 space-y-5 flex-1">
           {/* FOTOGRAFÍA EN ALTA DEFINICIÓN (Sin recortar ni distorsionar) */}
-          <div className="w-full aspect-square sm:aspect-video max-h-72 bg-gradient-to-b from-slate-50 to-white rounded-2xl p-4 border border-slate-100 flex items-center justify-center relative overflow-hidden">
+          <div className="w-full aspect-square sm:aspect-video max-h-64 bg-gradient-to-b from-slate-50 to-white rounded-2xl p-4 border border-slate-100 flex items-center justify-center relative overflow-hidden">
             {selectedProduct.image_url ? (
               <img
                 src={selectedProduct.image_url}
@@ -140,8 +154,8 @@ export function ModalProducto() {
           </div>
         </div>
 
-        {/* PIE DE ACCIÓN FIJO (SELECTOR DE CANTIDAD Y BOTÓN) */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 space-y-3 shadow-lg">
+        {/* PIE DE ACCIÓN FIJO (SELECTOR DE CANTIDAD Y BOTONES) */}
+        <div className="shrink-0 bg-white border-t border-gray-200 p-4 space-y-3 shadow-lg">
           <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] text-gray-400 font-bold uppercase block">Total a pagar:</span>
@@ -178,27 +192,38 @@ export function ModalProducto() {
             </div>
           </div>
 
-          <button
-            onClick={handleAddToCart}
-            disabled={addedAnimation}
-            className={`w-full h-12 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 ${
-              addedAnimation
-                ? 'bg-emerald-600 text-white'
-                : 'bg-[#1B2A82] hover:bg-[#142066] text-white'
-            }`}
-          >
-            {addedAnimation ? (
-              <>
-                <Check className="w-5 h-5" />
-                <span>¡Agregado al carrito!</span>
-              </>
-            ) : (
-              <>
-                <ShoppingBag className="w-4 h-4" />
-                <span>Agregar al Carrito</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="h-12 px-4 rounded-2xl font-extrabold text-xs text-gray-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors shrink-0"
+            >
+              Seguir viendo
+            </button>
+
+            <button
+              type="button"
+              onClick={handleAddToCart}
+              disabled={addedAnimation}
+              className={`flex-1 h-12 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 ${
+                addedAnimation
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-[#1B2A82] hover:bg-[#142066] text-white'
+              }`}
+            >
+              {addedAnimation ? (
+                <>
+                  <Check className="w-5 h-5" />
+                  <span>¡Agregado al carrito!</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>Agregar al Carrito</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
