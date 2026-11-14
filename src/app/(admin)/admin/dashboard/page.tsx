@@ -330,14 +330,14 @@ export default function AdminDashboardPage() {
                       <p className="text-gray-600 font-medium flex items-start gap-1 pt-0.5">
                         <MapPin className="w-3.5 h-3.5 text-[#1B2A82] shrink-0 mt-0.5" />
                         <span>
-                          {order.district_name || order.delivery_district} -{' '}
-                          {order.address || order.delivery_address}
+                          {order.district_name} -{' '}
+                          {order.address}
                         </span>
                       </p>
 
-                      {(order.notes || order.reference) && (
+                      {order.reference && (
                         <p className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-xl mt-1 font-medium">
-                          Ref: {order.notes || order.reference}
+                          Ref: {order.reference}
                         </p>
                       )}
                     </div>
