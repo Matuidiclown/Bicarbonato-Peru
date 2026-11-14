@@ -35,12 +35,9 @@ interface Order {
   created_at: string
   customer_name: string
   customer_phone: string
-  delivery_district: string
-  district_name?: string
-  delivery_address: string
-  address?: string
-  reference?: string
-  notes?: string
+  district_name: string | null
+  address: string
+  reference: string | null
   total_amount: number
   status: 'pending' | 'confirmed' | 'dispatched' | 'cancelled'
   seller_id: string | null
@@ -373,11 +370,11 @@ export default function VendedoraPedidosPage() {
                     <div className="space-y-1">
                       <span className="font-black text-gray-900 text-sm block">{order.customer_name}</span>
                       <span className="text-gray-600 block">
-                        📍 {order.delivery_district || order.district_name} - {order.delivery_address || order.address}
+                        📍 {order.district_name} - {order.address}
                       </span>
-                      {(order.reference || order.notes) && (
+                      {order.reference && (
                         <span className="text-gray-400 text-[11px] block italic">
-                          Ref: {order.reference || order.notes}
+                          Ref: {order.reference}
                         </span>
                       )}
                     </div>
