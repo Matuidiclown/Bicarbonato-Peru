@@ -98,8 +98,14 @@ export default function TiendaPage() {
     return item ? item.quantity : 0
   }
 
-  // Tarjeta interactiva con soporte para abrir Modal y scroll fluido en móvil
-  const ProductCard = ({ product }: { product: any }) => {
+  // Tarjeta interactiva con soporte táctil diferenciado para carrusel horizontal vs grilla vertical
+  const ProductCard = ({
+    product,
+    isHorizontalCarousel = false
+  }: {
+    product: any
+    isHorizontalCarousel?: boolean
+  }) => {
     const qty = getItemQuantityInCart(product.id)
     const tiers = product.price_tiers || []
     const baseTier = tiers.find((t: any) => t.min_quantity === 1) || tiers[0]
@@ -113,7 +119,9 @@ export default function TiendaPage() {
         {/* Zona Táctil para abrir el detalle */}
         <div
           onClick={() => openModal(product)}
-          className="cursor-pointer select-none touch-pan-y"
+          className={`cursor-pointer select-none ${
+            isHorizontalCarousel ? 'touch-auto' : 'touch-pan-y'
+          }`}
           role="button"
           tabIndex={0}
         >
@@ -164,6 +172,7 @@ export default function TiendaPage() {
         <div className="p-2.5 sm:p-3 pt-0">
           {qty === 0 ? (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 addItem(product, 1)
@@ -176,6 +185,7 @@ export default function TiendaPage() {
           ) : (
             <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl p-1">
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   updateQuantity(product.id, qty - 1)
@@ -186,6 +196,7 @@ export default function TiendaPage() {
               </button>
               <span className="text-xs font-black text-[#1B2A82]">{qty}</span>
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   updateQuantity(product.id, qty + 1)
@@ -251,10 +262,10 @@ export default function TiendaPage() {
               </Link>
             </div>
 
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory w-full min-w-0">
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory w-full min-w-0 touch-auto">
               {packProducts.map((p) => (
                 <div key={p.id} className="w-[155px] sm:w-[190px] shrink-0 snap-start">
-                  <ProductCard product={p} />
+                  <ProductCard product={p} isHorizontalCarousel />
                 </div>
               ))}
             </div>
