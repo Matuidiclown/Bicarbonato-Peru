@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 
 const CATALOG_CATEGORY_MAP: Record<string, string[]> = {
+  'nuevos-productos': ['Lanzamientos del Mes', 'Nuevos Insumos', 'Ediciones Especiales'],
   'packs': ['Kits de Desinfección', 'Kits de Lavado y Ropa', 'Kits de Cocina', 'Kits de Limpieza General'],
   'insumos-base': ['Bicarbonato de Sodio', 'Percarbonato de Sodio', 'Vinagre Blanco'],
   'lavanderia': ['Detergentes Líquidos y en Polvo', 'Desmanchadores y Blanqueadores', 'Suavizantes de Ropa', 'Perfumes y Plancha Fácil'],
@@ -33,6 +34,7 @@ const CATALOG_CATEGORY_MAP: Record<string, string[]> = {
 }
 
 const CATALOG_CATEGORY_LABELS: Record<string, string> = {
+  'nuevos-productos': '🆕 Nuevos Productos / Lanzamientos',
   'packs': 'Packs y Combos Ahorro',
   'insumos-base': 'Insumos Base / Naturales',
   'lavanderia': 'Lavandería y Cuidado Ropa',
@@ -58,14 +60,14 @@ export default function AdminProductosPage() {
   const [name, setName] = useState('')
   const [presentation, setPresentation] = useState('')
   const [description, setDescription] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('insumos-base')
-  const [selectedSubcategory, setSelectedSubcategory] = useState(CATALOG_CATEGORY_MAP['insumos-base'][0])
-  const [isFeatured, setIsFeatured] = useState(false)
-  const [featuredOrder, setFeaturedOrder] = useState('10')
+  const [selectedCategory, setSelectedCategory] = useState('nuevos-productos')
+  const [selectedSubcategory, setSelectedSubcategory] = useState(CATALOG_CATEGORY_MAP['nuevos-productos'][0])
+  const [isFeatured, setIsFeatured] = useState(true)
+  const [featuredOrder, setFeaturedOrder] = useState('1')
   const [imageFile, setImageFile] = useState<File | null>(null)
-  const [tier1Price, setTier1Price] = useState('9.00')
+  const [tier1Price, setTier1Price] = useState('20.00')
   const [tier3MinQty, setTier3MinQty] = useState('3')
-  const [tier3Price, setTier3Price] = useState('8.50')
+  const [tier3Price, setTier3Price] = useState('15.00')
 
   // --- ESTADOS DE EDICIÓN (MODAL) ---
   const [editingProduct, setEditingProduct] = useState<any | null>(null)
@@ -202,7 +204,7 @@ export default function AdminProductosPage() {
       setName('')
       setPresentation('')
       setDescription('')
-      setIsFeatured(false)
+      setIsFeatured(true)
       setFeaturedOrder('10')
       setImageFile(null)
       setSuccessMessage('¡Producto registrado exitosamente!')
@@ -404,7 +406,6 @@ export default function AdminProductosPage() {
     }
   }
 
-  // Filtrado combinado: Estado (Todos / Portada / Ocultos) + Categoría Principal
   const filteredProducts = products.filter(p => {
     const matchState =
       adminFilter === 'featured'
@@ -429,10 +430,10 @@ export default function AdminProductosPage() {
           <div>
             <h2 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
               <Tag className="w-5 h-5 text-[#1B2A82]" />
-              <span>Publicar Producto / Pack del Catálogo</span>
+              <span>Publicar Producto / Lanzamiento / Pack del Catálogo</span>
             </h2>
             <p className="text-xs text-gray-500">
-              Define su categoría, precios y decide si aparecerá destacado en la página principal.
+              Elige &quot;Nuevos Productos / Lanzamientos&quot; para novedades fuera del catálogo tradicional o selecciona su categoría.
             </p>
           </div>
 
@@ -502,7 +503,7 @@ export default function AdminProductosPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ej: Bicarbonato de Sodio 100% Puro"
+                  placeholder="Ej: Ácido Cítrico 100% Natural"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-medium"
@@ -514,7 +515,7 @@ export default function AdminProductosPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ej: Bolsa de 1 Kilo"
+                  placeholder="Ej: Bolsa de 1 Kg"
                   value={presentation}
                   onChange={e => setPresentation(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-medium"
@@ -540,7 +541,7 @@ export default function AdminProductosPage() {
                 <label className="block text-xs font-bold text-gray-700 mb-1">Descripción Breve</label>
                 <input
                   type="text"
-                  placeholder="Ej: Ideal para limpieza, desodorizar y repostería"
+                  placeholder="Ej: Remueve sarro, limpia depósitos de cal, hervidores y grifería"
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-medium"
@@ -563,7 +564,7 @@ export default function AdminProductosPage() {
                     <span>Mostrar en Página Principal (Portada)</span>
                   </span>
                   <span className="text-[11px] text-gray-500 block">
-                    Si no lo marcas, solo aparecerá dentro de su categoría y en el buscador.
+                    Si es &quot;Nuevos Productos&quot;, aparecerá en la sección dedicada de Nuevos Lanzamientos en la portada.
                   </span>
                 </div>
               </label>
@@ -642,7 +643,6 @@ export default function AdminProductosPage() {
             </h2>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-wrap">
-              {/* Filtro desplegable por Categoría */}
               <div className="flex items-center gap-1.5 bg-blue-50/70 border border-blue-200 rounded-xl px-2.5 py-1">
                 <Filter className="w-3.5 h-3.5 text-[#1B2A82] shrink-0" />
                 <select
@@ -662,7 +662,6 @@ export default function AdminProductosPage() {
                 </select>
               </div>
 
-              {/* Filtros rápidos de estado */}
               <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
@@ -767,7 +766,6 @@ export default function AdminProductosPage() {
                         </div>
                       </div>
 
-                      {/* BARRA DE VISIBILIDAD RÁPIDA (1 CLIC) */}
                       <div className="flex items-center gap-1.5 mb-2.5">
                         <button
                           type="button"
@@ -857,7 +855,6 @@ export default function AdminProductosPage() {
             )}
 
             <form onSubmit={handleUpdateProduct} className="space-y-4 text-xs">
-              {/* VISIBILIDAD Y PORTADA */}
               <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200 grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -891,7 +888,6 @@ export default function AdminProductosPage() {
                 </div>
               </div>
 
-              {/* CATEGORÍAS */}
               <div className="bg-blue-50/60 p-3.5 rounded-2xl border border-blue-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-gray-800 mb-1">Categoría Principal *</label>
@@ -924,7 +920,6 @@ export default function AdminProductosPage() {
                 </div>
               </div>
 
-              {/* NOMBRE Y PRESENTACIÓN */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Nombre del Producto *</label>
@@ -959,7 +954,6 @@ export default function AdminProductosPage() {
                 />
               </div>
 
-              {/* IMAGEN */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                 <p className="font-extrabold text-slate-800 uppercase tracking-wide text-[11px]">
                   Imagen del Producto
@@ -1026,7 +1020,6 @@ export default function AdminProductosPage() {
                 </div>
               </div>
 
-              {/* ESCALAS DE PRECIO */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5">
                 <p className="font-extrabold text-slate-800 uppercase tracking-wide text-[11px]">
                   Escalas de Precio

@@ -16,7 +16,8 @@ import {
   ShieldCheck,
   Truck,
   Eye,
-  Gift
+  Gift,
+  Flame
 } from 'lucide-react'
 
 const FREE_SHIPPING_THRESHOLD = 85.0
@@ -86,11 +87,25 @@ export default function TiendaPage() {
     loadCatalog()
   }, [supabase])
 
+  // 1. Nuevos Productos / Lanzamientos
+  const newProducts = products.filter((p) => p.category === 'nuevos-productos')
+
+  // 2. Packs y Combos
   const packProducts = products.filter(
-    (p) => p.category === 'packs' || p.name.toLowerCase().includes('pack') || p.name.toLowerCase().includes('kit')
+    (p) =>
+      p.category !== 'nuevos-productos' &&
+      (p.category === 'packs' ||
+        p.name.toLowerCase().includes('pack') ||
+        p.name.toLowerCase().includes('kit'))
   )
+
+  // 3. Productos Disponibles regulares
   const regularProducts = products.filter(
-    (p) => p.category !== 'packs' && !p.name.toLowerCase().includes('pack') && !p.name.toLowerCase().includes('kit')
+    (p) =>
+      p.category !== 'nuevos-productos' &&
+      p.category !== 'packs' &&
+      !p.name.toLowerCase().includes('pack') &&
+      !p.name.toLowerCase().includes('kit')
   )
 
   const getItemQuantityInCart = (productId: string) => {
@@ -98,13 +113,14 @@ export default function TiendaPage() {
     return item ? item.quantity : 0
   }
 
-  // Tarjeta interactiva con soporte táctil diferenciado para carrusel horizontal vs grilla vertical
   const ProductCard = ({
     product,
-    isHorizontalCarousel = false
+    isHorizontalCarousel = false,
+    isNewBadge = false
   }: {
     product: any
     isHorizontalCarousel?: boolean
+    isNewBadge?: boolean
   }) => {
     const qty = getItemQuantityInCart(product.id)
     const tiers = product.price_tiers || []
@@ -115,7 +131,11 @@ export default function TiendaPage() {
     const bestTier = sortedTiers.find((t: any) => t.min_quantity > 1)
 
     return (
-      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm flex flex-col justify-between overflow-hidden hover:shadow-md transition-shadow w-full min-w-0 group">
+      <div
+        className={`bg-white rounded-2xl border shadow-sm flex flex-col justify-between overflow-hidden hover:shadow-md transition-shadow w-full min-w-0 group ${
+          isNewBadge ? 'border-amber-300 ring-1 ring-amber-200/70' : 'border-gray-200/80'
+        }`}
+      >
         {/* Zona Táctil para abrir el detalle */}
         <div
           onClick={() => openModal(product)}
@@ -125,7 +145,7 @@ export default function TiendaPage() {
           role="button"
           tabIndex={0}
         >
-          {/* Imagen y Badge */}
+          {/* Imagen y Badges */}
           <div className="relative aspect-square w-full bg-slate-50 flex items-center justify-center p-2.5 sm:p-3 overflow-hidden">
             {product.image_url ? (
               <img
@@ -139,11 +159,18 @@ export default function TiendaPage() {
               <ShoppingBag className="w-8 h-8 text-gray-300" />
             )}
 
-            {bestTier && (
-              <div className="absolute top-2 left-2 bg-red-600 text-white font-black text-[9px] px-2 py-0.5 rounded-md shadow-sm">
-                Lleva {bestTier.min_quantity}+ a S/ {Number(bestTier.unit_price).toFixed(2)}
-              </div>
-            )}
+            <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+              {isNewBadge && (
+                <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-2 py-0.5 rounded-md shadow-sm uppercase">
+                  ¡NUEVO!
+                </span>
+              )}
+              {bestTier && (
+                <span className="bg-red-600 text-white font-black text-[9px] px-2 py-0.5 rounded-md shadow-sm">
+                  Lleva {bestTier.min_quantity}+ a S/ {Number(bestTier.unit_price).toFixed(2)}
+                </span>
+              )}
+            </div>
 
             <span className="absolute bottom-2 right-2 bg-slate-900/60 text-white p-1 rounded-md opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
               <Eye className="w-3.5 h-3.5" />
@@ -248,6 +275,33 @@ export default function TiendaPage() {
             </span>
           </div>
         </div>
+
+        {/* Sección 0: Nuevos Productos / Lanzamientos */}
+        {newProducts.length > 0 && (
+          <section className="space-y-3 w-full min-w-0">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+                <Flame className="w-5 h-5 text-red-600 fill-amber-400" />
+                <span>Nuevos Productos</span>
+                <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                  Lanzamiento
+                </span>
+              </h2>
+              <Link
+                href="/categoria/nuevos-productos"
+                className="text-xs font-black text-[#1B2A82] hover:underline"
+              >
+                Ver todos →
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 w-full min-w-0">
+              {newProducts.map((p) => (
+                <ProductCard key={p.id} product={p} isNewBadge />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Sección 1: Packs y Combos */}
         {packProducts.length > 0 && (

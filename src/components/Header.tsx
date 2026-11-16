@@ -19,8 +19,15 @@ import {
   Check
 } from 'lucide-react'
 
-// Estructura oficial de categorías compartida con /categoria/[slug]
+// Estructura oficial de categorías compartida con /categoria/[slug] y /admin/productos
 export const CATALOG_CATEGORIES = [
+  {
+    id: 'nuevos-productos',
+    slug: 'nuevos-productos',
+    label: 'Nuevos Productos',
+    emoji: '🆕',
+    subcategories: ['Lanzamientos del Mes', 'Nuevos Insumos', 'Ediciones Especiales']
+  },
   {
     id: 'packs',
     slug: 'packs',
@@ -91,14 +98,11 @@ export function Header({ activeCategory }: HeaderProps) {
   const addItem = useCartStore((state) => state.addItem)
   const totalCount = items.reduce((acc, i) => acc + i.quantity, 0)
 
-  // Conexión con el Modal Flotante de detalle de producto
   const openModal = useProductModalStore((state) => state.openModal)
 
-  // Estados de navegación
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
-  // Estados de búsqueda en vivo
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [isSearching, setIsSearching] = useState(false)
@@ -107,7 +111,6 @@ export function Header({ activeCategory }: HeaderProps) {
   const desktopSearchRef = useRef<HTMLDivElement>(null)
   const mobileSearchRef = useRef<HTMLDivElement>(null)
 
-  // Debounce para consultar en Supabase al escribir
   useEffect(() => {
     const cleanTerm = searchQuery.trim()
 
@@ -137,7 +140,6 @@ export function Header({ activeCategory }: HeaderProps) {
     return () => clearTimeout(timeoutId)
   }, [searchQuery, supabase])
 
-  // Cerrar el buscador solo si se toca fuera de AMBOS contenedores (escritorio y móvil)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node
@@ -203,7 +205,7 @@ export function Header({ activeCategory }: HeaderProps) {
                 setSearchQuery(e.target.value)
                 setShowSearchDropdown(true)
               }}
-              placeholder="Buscar productos (ej. bicarbonato, lejía, jabón)..."
+              placeholder="Buscar productos (ej. ácido cítrico, bicarbonato, lejía)..."
               className="w-full h-10 pl-10 pr-9 rounded-2xl bg-white text-gray-900 placeholder:text-gray-400 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-400 shadow-inner"
             />
             {isSearching ? (
@@ -220,7 +222,6 @@ export function Header({ activeCategory }: HeaderProps) {
             ) : null}
           </div>
 
-          {/* DESPLEGABLE FLOTANTE DE RESULTADOS (ESCRITORIO) */}
           {showSearchDropdown && searchQuery.trim().length >= 2 && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 text-gray-800 z-50 overflow-hidden max-h-96 overflow-y-auto">
               {isSearching ? (
@@ -368,7 +369,7 @@ export function Header({ activeCategory }: HeaderProps) {
         </div>
       </div>
 
-      {/* BUSCADOR EXCLUSIVO PARA MÓVILES (FILA DEDICADA CON REF PROPIA) */}
+      {/* BUSCADOR EXCLUSIVO PARA MÓVILES */}
       <div ref={mobileSearchRef} className="sm:hidden px-3 pb-2.5 pt-0.5">
         <div className="relative">
           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5 pointer-events-none" />
@@ -397,7 +398,6 @@ export function Header({ activeCategory }: HeaderProps) {
           ) : null}
         </div>
 
-        {/* RESULTADOS FLOTANTES EN MÓVIL */}
         {showSearchDropdown && searchQuery.trim().length >= 2 && (
           <div className="mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 text-gray-800 overflow-hidden max-h-80 overflow-y-auto">
             {isSearching ? (
