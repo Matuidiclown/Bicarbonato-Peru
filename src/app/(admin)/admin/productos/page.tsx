@@ -17,7 +17,8 @@ import {
   Save,
   Star,
   Eye,
-  EyeOff
+  EyeOff,
+  Filter
 } from 'lucide-react'
 
 const CATALOG_CATEGORY_MAP: Record<string, string[]> = {
@@ -48,7 +49,10 @@ export default function AdminProductosPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+
+  // Filtros del listado
   const [adminFilter, setAdminFilter] = useState<'all' | 'featured' | 'hidden'>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
 
   // --- ESTADOS DE CREACIÓN ---
   const [name, setName] = useState('')
@@ -400,10 +404,19 @@ export default function AdminProductosPage() {
     }
   }
 
+  // Filtrado combinado: Estado (Todos / Portada / Ocultos) + Categoría Principal
   const filteredProducts = products.filter(p => {
-    if (adminFilter === 'featured') return p.is_featured && p.is_active
-    if (adminFilter === 'hidden') return !p.is_active
-    return true
+    const matchState =
+      adminFilter === 'featured'
+        ? p.is_featured && p.is_active
+        : adminFilter === 'hidden'
+        ? !p.is_active
+        : true
+
+    const matchCategory =
+      categoryFilter === 'all' || p.category === categoryFilter
+
+    return matchState && matchCategory
   })
 
   return (
@@ -621,58 +634,92 @@ export default function AdminProductosPage() {
           </form>
         </div>
 
-        {/* LISTA DE PRODUCTOS CON CONTROLES RÁPIDOS DE VISIBILIDAD */}
+        {/* LISTA DE PRODUCTOS CON FILTRO POR CATEGORÍA Y VISIBILIDAD */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <h2 className="text-base font-extrabold text-gray-900">
               Productos Publicados ({filteredProducts.length})
             </h2>
 
-            {/* Filtros de gestión rápida */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setAdminFilter('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-colors ${
-                  adminFilter === 'all'
-                    ? 'bg-[#1B2A82] text-white'
-                    : 'bg-slate-100 text-gray-600 hover:bg-slate-200'
-                }`}
-              >
-                Todos ({products.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdminFilter('featured')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-colors ${
-                  adminFilter === 'featured'
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
-                }`}
-              >
-                <Star className="w-3.5 h-3.5 fill-current" />
-                <span>En Portada ({products.filter(p => p.is_featured && p.is_active).length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdminFilter('hidden')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-colors ${
-                  adminFilter === 'hidden'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <EyeOff className="w-3.5 h-3.5" />
-                <span>Ocultos / Sin Stock ({products.filter(p => !p.is_active).length})</span>
-              </button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-wrap">
+              {/* Filtro desplegable por Categoría */}
+              <div className="flex items-center gap-1.5 bg-blue-50/70 border border-blue-200 rounded-xl px-2.5 py-1">
+                <Filter className="w-3.5 h-3.5 text-[#1B2A82] shrink-0" />
+                <select
+                  value={categoryFilter}
+                  onChange={e => setCategoryFilter(e.target.value)}
+                  className="bg-transparent text-xs font-extrabold text-[#1B2A82] focus:outline-none py-1 pr-1"
+                >
+                  <option value="all">Todas las categorías ({products.length})</option>
+                  {Object.keys(CATALOG_CATEGORY_LABELS).map(catKey => {
+                    const countInCat = products.filter(p => p.category === catKey).length
+                    return (
+                      <option key={catKey} value={catKey}>
+                        {CATALOG_CATEGORY_LABELS[catKey]} ({countInCat})
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+
+              {/* Filtros rápidos de estado */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setAdminFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-colors ${
+                    adminFilter === 'all'
+                      ? 'bg-[#1B2A82] text-white'
+                      : 'bg-slate-100 text-gray-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdminFilter('featured')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-colors ${
+                    adminFilter === 'featured'
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                  }`}
+                >
+                  <Star className="w-3.5 h-3.5 fill-current" />
+                  <span>En Portada</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdminFilter('hidden')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-colors ${
+                    adminFilter === 'hidden'
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <EyeOff className="w-3.5 h-3.5" />
+                  <span>Ocultos</span>
+                </button>
+              </div>
             </div>
           </div>
 
           {isLoading ? (
             <div className="py-8 text-center text-xs text-gray-500 font-bold">Cargando productos...</div>
           ) : filteredProducts.length === 0 ? (
-            <div className="py-8 text-center text-xs text-gray-500 border rounded-xl bg-slate-50 font-medium">
-              No hay productos en este filtro.
+            <div className="py-8 text-center text-xs text-gray-500 border rounded-xl bg-slate-50 font-medium space-y-2">
+              <p>No hay productos que coincidan con los filtros seleccionados.</p>
+              {(categoryFilter !== 'all' || adminFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCategoryFilter('all')
+                    setAdminFilter('all')
+                  }}
+                  className="text-xs font-extrabold text-[#1B2A82] hover:underline"
+                >
+                  Limpiar filtros y ver todos
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

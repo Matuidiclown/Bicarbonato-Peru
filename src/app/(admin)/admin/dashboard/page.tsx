@@ -13,7 +13,10 @@ import {
   Package,
   Sparkles,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Award,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 
 interface Seller {
@@ -21,6 +24,13 @@ interface Seller {
   name: string
   phone_number: string
   ref_code?: string
+}
+
+interface TopProductStat {
+  name: string
+  totalUnits: number
+  totalRevenue: number
+  orderCount: number
 }
 
 export default function AdminDashboardPage() {
@@ -33,6 +43,7 @@ export default function AdminDashboardPage() {
   // Filtros
   const [statusFilter, setStatusFilter] = useState('all')
   const [sellerFilter, setSellerFilter] = useState('all')
+  const [showTopProducts, setShowTopProducts] = useState(true)
 
   // Modal para eliminar (Soft delete)
   const [orderToDelete, setOrderToDelete] = useState<any | null>(null)
@@ -41,7 +52,6 @@ export default function AdminDashboardPage() {
   const fetchData = async () => {
     setIsLoading(true)
 
-    // Cargar vendedoras
     const { data: sellersData } = await supabase
       .from('whatsapp_sellers')
       .select('id, name, phone_number, ref_code')
@@ -51,7 +61,6 @@ export default function AdminDashboardPage() {
       setSellers(sellersData)
     }
 
-    // Cargar pedidos vinculando los datos de la vendedora asignada
     const { data: ordersData, error } = await supabase
       .from('orders')
       .select(`
@@ -119,17 +128,13 @@ export default function AdminDashboardPage() {
   }, [orders, statusFilter, sellerFilter])
 
   // 5. Métricas reactivas según el filtro seleccionado
-  const { totalSoles, confirmedCount, highValueOrdersCount } = useMemo(() => {
+  const { totalSoles, highValueOrdersCount } = useMemo(() => {
     let soles = 0
-    let confirmed = 0
     let highValue = 0
 
     filteredOrders.forEach((o) => {
       const amount = Number(o.total_amount || 0)
       soles += amount
-      if (o.status === 'confirmed' || o.status === 'dispatched') {
-        confirmed++
-      }
       if (amount >= 100) {
         highValue++
       }
@@ -137,10 +142,60 @@ export default function AdminDashboardPage() {
 
     return {
       totalSoles: soles,
-      confirmedCount: confirmed,
       highValueOrdersCount: highValue
     }
   }, [filteredOrders])
+
+  // 6. Ranking de Productos / Packs Más Pedidos (SOLO Confirmados y Despachados)
+  const { topProducts, closedOrdersCount } = useMemo(() => {
+    const map = new Map<string, TopProductStat>()
+    let closedCount = 0
+
+    orders.forEach((order) => {
+      const st = (order.status || '').toLowerCase()
+      // Excluir pendientes y cancelados ("curiosos que no concretan")
+      if (st !== 'confirmed' && st !== 'confirmado' && st !== 'dispatched' && st !== 'despachado') {
+        return
+      }
+      // Si se filtró por una vendedora específica, respetar también ese filtro
+      if (sellerFilter !== 'all' && order.seller_id !== sellerFilter) {
+        return
+      }
+
+      closedCount++
+      const seenInThisOrder = new Set<string>()
+
+      ;(order.order_items || []).forEach((item: any) => {
+        const rawName = (item.product_name || 'Producto sin nombre').trim()
+        const qty = Number(item.quantity || 0)
+        const sub = Number(item.subtotal || 0)
+
+        const current = map.get(rawName) || {
+          name: rawName,
+          totalUnits: 0,
+          totalRevenue: 0,
+          orderCount: 0
+        }
+
+        current.totalUnits += qty
+        current.totalRevenue += sub
+        if (!seenInThisOrder.has(rawName)) {
+          current.orderCount += 1
+          seenInThisOrder.add(rawName)
+        }
+
+        map.set(rawName, current)
+      })
+    })
+
+    const sorted = Array.from(map.values())
+      .sort((a, b) => b.totalUnits - a.totalUnits || b.totalRevenue - a.totalRevenue)
+      .slice(0, 10)
+
+    return { topProducts: sorted, closedOrdersCount: closedCount }
+  }, [orders, sellerFilter])
+
+  const maxUnitsSold = topProducts.length > 0 ? topProducts[0].totalUnits : 1
 
   return (
     <div className="min-h-screen bg-slate-100 pb-16">
@@ -191,6 +246,106 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* RANKING DE PRODUCTOS / PACKS MÁS SOLICITADOS (SOLO CONFIRMADOS / DESPACHADOS) */}
+        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowTopProducts(!showTopProducts)}
+            className="w-full p-4 sm:px-6 flex items-center justify-between text-left hover:bg-slate-50/70 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <Award className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-sm sm:text-base font-black text-gray-900">
+                  Productos y Packs Más Solicitados (Ventas Concretadas)
+                </h2>
+                <p className="text-[11px] font-semibold text-gray-500">
+                  Calculado solo sobre <span className="text-emerald-700 font-extrabold">{closedOrdersCount} pedidos confirmados o despachados</span> (excluye pendientes y cancelados)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#1B2A82] shrink-0">
+              <span className="hidden sm:inline">{showTopProducts ? 'Ocultar' : 'Ver ranking'}</span>
+              {showTopProducts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          </button>
+
+          {showTopProducts && (
+            <div className="px-4 sm:px-6 pb-5 pt-2 border-t border-gray-100">
+              {isLoading ? (
+                <div className="py-6 text-center text-xs font-bold text-gray-400">
+                  Calculando estadísticas de ventas reales...
+                </div>
+              ) : topProducts.length === 0 ? (
+                <div className="py-6 text-center text-xs font-semibold text-gray-500 bg-slate-50 rounded-xl border border-dashed">
+                  Aún no hay pedidos marcados como Confirmados o Despachados para esta selección.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  {topProducts.map((item, idx) => {
+                    const widthPct = Math.max(8, Math.round((item.totalUnits / maxUnitsSold) * 100))
+                    const isTop3 = idx < 3
+
+                    return (
+                      <div
+                        key={item.name}
+                        className={`p-3 rounded-xl border space-y-2 ${
+                          isTop3
+                            ? 'bg-amber-50/40 border-amber-200'
+                            : 'bg-slate-50/60 border-gray-200/80'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${
+                                idx === 0
+                                  ? 'bg-amber-500 text-white'
+                                  : idx === 1
+                                  ? 'bg-slate-700 text-white'
+                                  : idx === 2
+                                  ? 'bg-amber-700 text-white'
+                                  : 'bg-gray-200 text-gray-700'
+                              }`}
+                            >
+                              #{idx + 1}
+                            </span>
+                            <span className="text-xs font-extrabold text-gray-900 truncate" title={item.name}>
+                              {item.name}
+                            </span>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="text-xs font-black text-[#1B2A82] block">
+                              {item.totalUnits} {item.totalUnits === 1 ? 'ud' : 'uds'}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-700">
+                              S/ {item.totalRevenue.toFixed(2)} ({item.orderCount} {item.orderCount === 1 ? 'pedido' : 'pedidos'})
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Barra visual de demanda */}
+                        <div className="w-full h-1.5 bg-gray-200/80 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              isTop3 ? 'bg-amber-500' : 'bg-[#1B2A82]'
+                            }`}
+                            style={{ width: `${widthPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
 
         {/* BARRA DE FILTROS */}
         <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4">
@@ -330,14 +485,14 @@ export default function AdminDashboardPage() {
                       <p className="text-gray-600 font-medium flex items-start gap-1 pt-0.5">
                         <MapPin className="w-3.5 h-3.5 text-[#1B2A82] shrink-0 mt-0.5" />
                         <span>
-                          {order.district_name} -{' '}
-                          {order.address}
+                          {order.district_name || order.delivery_district} -{' '}
+                          {order.address || order.delivery_address}
                         </span>
                       </p>
 
-                      {order.reference && (
+                      {(order.notes || order.reference) && (
                         <p className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-xl mt-1 font-medium">
-                          Ref: {order.reference}
+                          Ref: {order.notes || order.reference}
                         </p>
                       )}
                     </div>
