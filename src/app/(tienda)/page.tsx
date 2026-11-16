@@ -73,6 +73,8 @@ export default function TiendaPage() {
         .from('products')
         .select('*, price_tiers(*)')
         .eq('is_active', true)
+        .eq('is_featured', true)
+        .order('featured_order', { ascending: true })
         .order('created_at', { ascending: false })
 
       if (!error && data) {
@@ -96,7 +98,7 @@ export default function TiendaPage() {
     return item ? item.quantity : 0
   }
 
-  // Tarjeta interactiva con soporte para abrir Modal
+  // Tarjeta interactiva con soporte para abrir Modal y scroll fluido en móvil
   const ProductCard = ({ product }: { product: any }) => {
     const qty = getItemQuantityInCart(product.id)
     const tiers = product.price_tiers || []
@@ -111,7 +113,7 @@ export default function TiendaPage() {
         {/* Zona Táctil para abrir el detalle */}
         <div
           onClick={() => openModal(product)}
-          className="cursor-pointer select-none"
+          className="cursor-pointer select-none touch-pan-y"
           role="button"
           tabIndex={0}
         >
@@ -121,7 +123,8 @@ export default function TiendaPage() {
               <img
                 src={product.image_url}
                 alt={product.name}
-                className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-200"
+                draggable={false}
+                className="max-h-full max-w-full object-contain pointer-events-none group-hover:scale-105 transition-transform duration-200"
                 loading="lazy"
               />
             ) : (
@@ -199,7 +202,7 @@ export default function TiendaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col pb-24 w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen bg-slate-100 flex flex-col pb-24 w-full max-w-full overflow-x-clip">
       <Header />
 
       <main className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-5 space-y-7 flex-1 min-w-0">
@@ -248,7 +251,7 @@ export default function TiendaPage() {
               </Link>
             </div>
 
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory w-full min-w-0 touch-pan-x">
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory w-full min-w-0">
               {packProducts.map((p) => (
                 <div key={p.id} className="w-[155px] sm:w-[190px] shrink-0 snap-start">
                   <ProductCard product={p} />

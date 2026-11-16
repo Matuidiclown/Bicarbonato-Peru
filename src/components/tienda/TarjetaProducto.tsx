@@ -29,7 +29,7 @@ export function TarjetaProducto({ product }: Props) {
       {/* Zona táctil para abrir el detalle */}
       <div
         onClick={() => openModal(product)}
-        className="cursor-pointer select-none"
+        className="cursor-pointer select-none touch-pan-y"
         role="button"
         tabIndex={0}
       >
@@ -39,7 +39,8 @@ export function TarjetaProducto({ product }: Props) {
             <img
               src={product.image_url}
               alt={product.name}
-              className="object-contain max-h-full max-w-full group-hover:scale-105 transition-transform duration-200"
+              draggable={false}
+              className="object-contain max-h-full max-w-full pointer-events-none group-hover:scale-105 transition-transform duration-200"
               loading="lazy"
             />
           ) : (
