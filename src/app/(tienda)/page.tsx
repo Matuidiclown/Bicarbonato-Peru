@@ -30,7 +30,6 @@ import {
 
 const FREE_SHIPPING_THRESHOLD = 85.0
 
-// Identidad visual temática y amigable para cada categoría (sin repetir fotos de productos)
 const CATEGORY_VISUAL_THEMES: Record<
   string,
   {
@@ -43,15 +42,6 @@ const CATEGORY_VISUAL_THEMES: Record<
     subtitle: string
   }
 > = {
-  'nuevos-productos': {
-    bgGradient: 'from-amber-50 via-orange-50/70 to-amber-100/50',
-    iconBg: 'bg-amber-400 text-slate-950 shadow-amber-200',
-    iconColor: 'text-slate-950',
-    badgeBg: 'bg-red-600',
-    badgeText: 'text-white',
-    Icon: Flame,
-    subtitle: 'Últimos lanzamientos'
-  },
   packs: {
     bgGradient: 'from-blue-50 via-indigo-50/80 to-sky-100/50',
     iconBg: 'bg-[#1B2A82] text-white shadow-blue-200',
@@ -123,6 +113,15 @@ const CATEGORY_VISUAL_THEMES: Record<
     badgeText: 'text-amber-800',
     Icon: Brush,
     subtitle: 'Esponjas, guantes y accesorios'
+  },
+  'nuevos-productos': {
+    bgGradient: 'from-amber-50 via-orange-50/70 to-amber-100/50',
+    iconBg: 'bg-amber-400 text-slate-950 shadow-amber-200',
+    iconColor: 'text-slate-950',
+    badgeBg: 'bg-red-600',
+    badgeText: 'text-white',
+    Icon: Flame,
+    subtitle: 'Últimos lanzamientos'
   }
 }
 
@@ -131,15 +130,11 @@ export default function TiendaPage() {
   const [products, setProducts] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  // Carrito Zustand
   const items = useCartStore((state) => state.items)
   const addItem = useCartStore((state) => state.addItem)
   const updateQuantity = useCartStore((state) => state.updateQuantity)
-
-  // Modal Flotante de Detalle
   const openModal = useProductModalStore((state) => state.openModal)
 
-  // Cálculos reactivos de compra
   const { finalTotal, totalDiscount, totalCount } = useMemo(() => {
     let subtotalBase = 0
     let total = 0
@@ -190,7 +185,7 @@ export default function TiendaPage() {
     loadCatalog()
   }, [supabase])
 
-  // Tarjetas de categorías con diseño gráfico limpio y conteo real de productos
+  // Tarjetas de categorías: Packs Promocionales primero, Nuevos Productos al último
   const visualCategories = useMemo(() => {
     return CATALOG_CATEGORIES.map((cat) => {
       const catProducts = products.filter((p) => {
@@ -222,16 +217,12 @@ export default function TiendaPage() {
     }).filter((cat) => cat.slug !== 'nuevos-productos' || cat.count > 0)
   }, [products])
 
-  // Productos destacados en portada
   const featuredProducts = useMemo(() => {
     const featured = products.filter((p) => p.is_featured)
     return featured.length > 0 ? featured : products
   }, [products])
 
-  // 1. Nuevos Productos / Lanzamientos
-  const newProducts = featuredProducts.filter((p) => p.category === 'nuevos-productos')
-
-  // 2. Packs y Combos
+  // 1. Packs Promocionales
   const packProducts = featuredProducts.filter(
     (p) =>
       p.category !== 'nuevos-productos' &&
@@ -240,7 +231,7 @@ export default function TiendaPage() {
         p.name.toLowerCase().includes('kit'))
   )
 
-  // 3. Productos Disponibles regulares
+  // 2. Productos Destacados regulares
   const regularProducts = featuredProducts.filter(
     (p) =>
       p.category !== 'nuevos-productos' &&
@@ -248,6 +239,9 @@ export default function TiendaPage() {
       !p.name.toLowerCase().includes('pack') &&
       !p.name.toLowerCase().includes('kit')
   )
+
+  // 3. Nuevos Productos / Lanzamientos (al último)
+  const newProducts = featuredProducts.filter((p) => p.category === 'nuevos-productos')
 
   const getItemQuantityInCart = (productId: string) => {
     const item = items.find((i) => i.id === productId)
@@ -277,7 +271,6 @@ export default function TiendaPage() {
           isNewBadge ? 'border-amber-300 ring-1 ring-amber-200/70' : 'border-gray-200/80'
         }`}
       >
-        {/* Zona Táctil para abrir el detalle */}
         <div
           onClick={() => openModal(product)}
           className={`cursor-pointer select-none ${
@@ -286,7 +279,6 @@ export default function TiendaPage() {
           role="button"
           tabIndex={0}
         >
-          {/* Imagen y Badges */}
           <div className="relative aspect-square w-full bg-slate-50 flex items-center justify-center p-2.5 sm:p-3 overflow-hidden">
             {product.image_url ? (
               <img
@@ -318,7 +310,6 @@ export default function TiendaPage() {
             </span>
           </div>
 
-          {/* Información del Producto */}
           <div className="p-2.5 sm:p-3 space-y-1 min-w-0">
             <span className="text-[10px] font-black text-[#1B2A82] uppercase block truncate">
               {product.presentation || 'Limpieza'}
@@ -336,7 +327,6 @@ export default function TiendaPage() {
           </div>
         </div>
 
-        {/* Botones de Acción (Carrito rápido) */}
         <div className="p-2.5 sm:p-3 pt-0">
           {qty === 0 ? (
             <button
@@ -417,7 +407,7 @@ export default function TiendaPage() {
           </div>
         </div>
 
-        {/* SECCIÓN VISUAL DE CATEGORÍAS (ILUSTRACIÓN LIMPIA POR SECCIÓN SIN RUIDO VISUAL) */}
+        {/* SECCIÓN VISUAL DE CATEGORÍAS (PACKS PROMOCIONALES PRIMERO, NUEVOS PRODUCTOS AL ÚLTIMO) */}
         <section className="space-y-3 w-full min-w-0">
           <div className="flex items-center justify-between">
             <h2 className="text-base sm:text-lg font-black text-gray-900 flex items-center gap-2">
@@ -438,15 +428,12 @@ export default function TiendaPage() {
                   href={`/categoria/${cat.slug}`}
                   className="bg-white rounded-2xl border border-gray-200/90 shadow-sm hover:shadow-md hover:border-[#1B2A82]/40 transition-all overflow-hidden flex flex-col justify-between group active:scale-[0.98]"
                 >
-                  {/* Cabecera gráfica ilustrada por tema (cero fotos repetidas de productos) */}
                   <div
                     className={`relative h-24 sm:h-28 w-full bg-gradient-to-br ${cat.theme.bgGradient} flex items-center justify-center p-3 overflow-hidden`}
                   >
-                    {/* Círculo decorativo de fondo */}
                     <div className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full bg-white/40 pointer-events-none" />
                     <div className="absolute -left-3 -top-3 w-12 h-12 rounded-full bg-white/30 pointer-events-none" />
 
-                    {/* Ícono ilustrativo central */}
                     <div
                       className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl ${cat.theme.iconBg} shadow-md flex items-center justify-center group-hover:scale-110 transition-transform duration-200`}
                     >
@@ -462,7 +449,6 @@ export default function TiendaPage() {
                     )}
                   </div>
 
-                  {/* Título grande + subtítulo explicativo */}
                   <div className="p-3 bg-white border-t border-gray-100 flex items-center justify-between gap-2 flex-1">
                     <div className="min-w-0 space-y-0.5">
                       <h3 className="font-black text-xs sm:text-sm text-gray-900 leading-snug line-clamp-2 group-hover:text-[#1B2A82] transition-colors">
@@ -482,40 +468,13 @@ export default function TiendaPage() {
           </div>
         </section>
 
-        {/* Sección 0: Nuevos Productos / Lanzamientos */}
-        {newProducts.length > 0 && (
-          <section className="space-y-3 w-full min-w-0">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
-                <Flame className="w-5 h-5 text-red-600 fill-amber-400" />
-                <span>Nuevos Productos</span>
-                <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                  Lanzamiento
-                </span>
-              </h2>
-              <Link
-                href="/categoria/nuevos-productos"
-                className="text-xs font-black text-[#1B2A82] hover:underline"
-              >
-                Ver todos →
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 w-full min-w-0">
-              {newProducts.map((p) => (
-                <ProductCard key={p.id} product={p} isNewBadge />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Sección 1: Packs y Combos */}
+        {/* Sección 1: Packs Promocionales */}
         {packProducts.length > 0 && (
           <section className="space-y-3 w-full min-w-0">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
                 <Package className="w-5 h-5 text-[#1B2A82]" />
-                <span>Packs y Combos Ahorro</span>
+                <span>Packs Promocionales</span>
               </h2>
               <Link href="/categoria/packs" className="text-xs font-black text-[#1B2A82] hover:underline">
                 Ver todos →
@@ -560,6 +519,33 @@ export default function TiendaPage() {
             </div>
           )}
         </section>
+
+        {/* Sección 3 (Al último): Nuevos Productos / Lanzamientos */}
+        {newProducts.length > 0 && (
+          <section className="space-y-3 w-full min-w-0">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+                <Flame className="w-5 h-5 text-red-600 fill-amber-400" />
+                <span>Nuevos Productos</span>
+                <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                  Lanzamiento
+                </span>
+              </h2>
+              <Link
+                href="/categoria/nuevos-productos"
+                className="text-xs font-black text-[#1B2A82] hover:underline"
+              >
+                Ver todos →
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 w-full min-w-0">
+              {newProducts.map((p) => (
+                <ProductCard key={p.id} product={p} isNewBadge />
+              ))}
+            </div>
+          </section>
+        )}
       </main>
 
       {/* Sticky Bottom Bar */}

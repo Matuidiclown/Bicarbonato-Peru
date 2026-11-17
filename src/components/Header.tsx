@@ -22,16 +22,9 @@ import {
 // Estructura oficial de categorías compartida con /categoria/[slug] y /admin/productos
 export const CATALOG_CATEGORIES = [
   {
-    id: 'nuevos-productos',
-    slug: 'nuevos-productos',
-    label: 'Nuevos Productos',
-    emoji: '🆕',
-    subcategories: ['Lanzamientos del Mes', 'Nuevos Insumos', 'Ediciones Especiales']
-  },
-  {
     id: 'packs',
     slug: 'packs',
-    label: 'Packs y Combos Ahorro',
+    label: 'Packs Promocionales',
     emoji: '🎁',
     subcategories: ['Kits de Desinfección', 'Kits de Lavado y Ropa', 'Kits de Cocina', 'Kits de Limpieza General']
   },
@@ -83,6 +76,13 @@ export const CATALOG_CATEGORIES = [
     label: 'Utensilios y Accesorios',
     emoji: '🧽',
     subcategories: ['Esponjas y Fibras', 'Guantes de Limpieza', 'Trapeadores de Microfibra', 'Bolsas de Basura']
+  },
+  {
+    id: 'nuevos-productos',
+    slug: 'nuevos-productos',
+    label: 'Nuevos Productos',
+    emoji: '🆕',
+    subcategories: ['Lanzamientos del Mes', 'Nuevos Insumos', 'Ediciones Especiales']
   }
 ]
 
