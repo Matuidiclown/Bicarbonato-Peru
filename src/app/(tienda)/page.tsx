@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useCartStore } from '@/store/useCartStore'
 import { useProductModalStore } from '@/store/useProductModalStore'
-import { Header } from '@/components/Header'
+import { Header, CATALOG_CATEGORIES } from '@/components/Header'
 import {
   ShoppingBag,
   Plus,
@@ -17,10 +17,114 @@ import {
   Truck,
   Eye,
   Gift,
-  Flame
+  Flame,
+  LayoutGrid,
+  Shirt,
+  Utensils,
+  Droplets,
+  SprayCan,
+  Flower2,
+  Brush,
+  FlaskConical
 } from 'lucide-react'
 
 const FREE_SHIPPING_THRESHOLD = 85.0
+
+// Identidad visual temática y amigable para cada categoría (sin repetir fotos de productos)
+const CATEGORY_VISUAL_THEMES: Record<
+  string,
+  {
+    bgGradient: string
+    iconBg: string
+    iconColor: string
+    badgeBg: string
+    badgeText: string
+    Icon: React.ElementType
+    subtitle: string
+  }
+> = {
+  'nuevos-productos': {
+    bgGradient: 'from-amber-50 via-orange-50/70 to-amber-100/50',
+    iconBg: 'bg-amber-400 text-slate-950 shadow-amber-200',
+    iconColor: 'text-slate-950',
+    badgeBg: 'bg-red-600',
+    badgeText: 'text-white',
+    Icon: Flame,
+    subtitle: 'Últimos lanzamientos'
+  },
+  packs: {
+    bgGradient: 'from-blue-50 via-indigo-50/80 to-sky-100/50',
+    iconBg: 'bg-[#1B2A82] text-white shadow-blue-200',
+    iconColor: 'text-white',
+    badgeBg: 'bg-white/95 border border-blue-100',
+    badgeText: 'text-[#1B2A82]',
+    Icon: Gift,
+    subtitle: 'Kits con precio especial'
+  },
+  'insumos-base': {
+    bgGradient: 'from-sky-50 via-cyan-50/80 to-blue-100/40',
+    iconBg: 'bg-sky-600 text-white shadow-sky-200',
+    iconColor: 'text-white',
+    badgeBg: 'bg-white/95 border border-sky-100',
+    badgeText: 'text-sky-800',
+    Icon: FlaskConical,
+    subtitle: 'Bicarbonato, percarbonato y más'
+  },
+  lavanderia: {
+    bgGradient: 'from-indigo-50 via-blue-50/80 to-violet-100/50',
+    iconBg: 'bg-indigo-600 text-white shadow-indigo-200',
+    iconColor: 'text-white',
+    badgeBg: 'bg-white/95 border border-indigo-100',
+    badgeText: 'text-indigo-800',
+    Icon: Shirt,
+    subtitle: 'Detergentes, suavizantes y ropa'
+  },
+  cocina: {
+    bgGradient: 'from-emerald-50 via-teal-50/80 to-green-100/50',
+    iconBg: 'bg-emerald-600 text-white shadow-emerald-200',
+    iconColor: 'text-white',
+    badgeBg: 'bg-white/95 border border-emerald-100',
+    badgeText: 'text-emerald-800',
+    Icon: Utensils,
+    subtitle: 'Lavavajillas y desengrasantes'
+  },
+  'bano-pisos': {
+    bgGradient: 'from-cyan-50 via-teal-50/70 to-sky-100/50',
+    iconBg: 'bg-cyan-600 text-white shadow-cyan-200',
+    iconColor: 'text-white',
+    badgeBg: 'bg-white/95 border border-cyan-100',
+    badgeText: 'text-cyan-800',
+    Icon: Droplets,
+    subtitle: 'Quita sarro y limpiapisos'
+  },
+  'vidrios-superficies': {
+    bgGradient: 'from-violet-50 via-purple-50/70 to-indigo-100/50',
+    iconBg: 'bg-violet-600 text-white shadow-violet-200',
+    iconColor: 'text-white',
+    badgeBg: 'bg-white/95 border border-violet-100',
+    badgeText: 'text-violet-800',
+    Icon: SprayCan,
+    subtitle: 'Vidrios, tapices y mascotas'
+  },
+  aromatizadores: {
+    bgGradient: 'from-rose-50 via-pink-50/80 to-fuchsia-100/40',
+    iconBg: 'bg-rose-500 text-white shadow-rose-200',
+    iconColor: 'text-white',
+    badgeBg: 'bg-white/95 border border-rose-100',
+    badgeText: 'text-rose-800',
+    Icon: Flower2,
+    subtitle: 'Fragancias duraderas para el hogar'
+  },
+  utensilios: {
+    bgGradient: 'from-amber-50 via-yellow-50/70 to-orange-100/40',
+    iconBg: 'bg-amber-500 text-white shadow-amber-200',
+    iconColor: 'text-white',
+    badgeBg: 'bg-white/95 border border-amber-100',
+    badgeText: 'text-amber-800',
+    Icon: Brush,
+    subtitle: 'Esponjas, guantes y accesorios'
+  }
+}
 
 export default function TiendaPage() {
   const supabase = createClient()
@@ -74,7 +178,6 @@ export default function TiendaPage() {
         .from('products')
         .select('*, price_tiers(*)')
         .eq('is_active', true)
-        .eq('is_featured', true)
         .order('featured_order', { ascending: true })
         .order('created_at', { ascending: false })
 
@@ -87,11 +190,49 @@ export default function TiendaPage() {
     loadCatalog()
   }, [supabase])
 
+  // Tarjetas de categorías con diseño gráfico limpio y conteo real de productos
+  const visualCategories = useMemo(() => {
+    return CATALOG_CATEGORIES.map((cat) => {
+      const catProducts = products.filter((p) => {
+        if (cat.slug === 'packs') {
+          return (
+            p.category === 'packs' ||
+            p.name?.toLowerCase().includes('pack') ||
+            p.name?.toLowerCase().includes('kit')
+          )
+        }
+        return p.category?.toLowerCase().includes(cat.slug.toLowerCase())
+      })
+
+      const theme = CATEGORY_VISUAL_THEMES[cat.slug] || {
+        bgGradient: 'from-slate-50 to-blue-50/60',
+        iconBg: 'bg-[#1B2A82] text-white shadow-blue-200',
+        iconColor: 'text-white',
+        badgeBg: 'bg-white/95 border border-blue-100',
+        badgeText: 'text-[#1B2A82]',
+        Icon: Sparkles,
+        subtitle: cat.subcategories.slice(0, 2).join(', ')
+      }
+
+      return {
+        ...cat,
+        count: catProducts.length,
+        theme
+      }
+    }).filter((cat) => cat.slug !== 'nuevos-productos' || cat.count > 0)
+  }, [products])
+
+  // Productos destacados en portada
+  const featuredProducts = useMemo(() => {
+    const featured = products.filter((p) => p.is_featured)
+    return featured.length > 0 ? featured : products
+  }, [products])
+
   // 1. Nuevos Productos / Lanzamientos
-  const newProducts = products.filter((p) => p.category === 'nuevos-productos')
+  const newProducts = featuredProducts.filter((p) => p.category === 'nuevos-productos')
 
   // 2. Packs y Combos
-  const packProducts = products.filter(
+  const packProducts = featuredProducts.filter(
     (p) =>
       p.category !== 'nuevos-productos' &&
       (p.category === 'packs' ||
@@ -100,7 +241,7 @@ export default function TiendaPage() {
   )
 
   // 3. Productos Disponibles regulares
-  const regularProducts = products.filter(
+  const regularProducts = featuredProducts.filter(
     (p) =>
       p.category !== 'nuevos-productos' &&
       p.category !== 'packs' &&
@@ -276,6 +417,71 @@ export default function TiendaPage() {
           </div>
         </div>
 
+        {/* SECCIÓN VISUAL DE CATEGORÍAS (ILUSTRACIÓN LIMPIA POR SECCIÓN SIN RUIDO VISUAL) */}
+        <section className="space-y-3 w-full min-w-0">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base sm:text-lg font-black text-gray-900 flex items-center gap-2">
+              <LayoutGrid className="w-5 h-5 text-[#1B2A82]" />
+              <span>Explora por Categoría</span>
+            </h2>
+            <span className="text-[11px] font-extrabold text-[#1B2A82] bg-blue-50 px-2.5 py-1 rounded-full">
+              {products.length} productos en total
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 w-full min-w-0">
+            {visualCategories.map((cat) => {
+              const IconComponent = cat.theme.Icon
+              return (
+                <Link
+                  key={cat.id}
+                  href={`/categoria/${cat.slug}`}
+                  className="bg-white rounded-2xl border border-gray-200/90 shadow-sm hover:shadow-md hover:border-[#1B2A82]/40 transition-all overflow-hidden flex flex-col justify-between group active:scale-[0.98]"
+                >
+                  {/* Cabecera gráfica ilustrada por tema (cero fotos repetidas de productos) */}
+                  <div
+                    className={`relative h-24 sm:h-28 w-full bg-gradient-to-br ${cat.theme.bgGradient} flex items-center justify-center p-3 overflow-hidden`}
+                  >
+                    {/* Círculo decorativo de fondo */}
+                    <div className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full bg-white/40 pointer-events-none" />
+                    <div className="absolute -left-3 -top-3 w-12 h-12 rounded-full bg-white/30 pointer-events-none" />
+
+                    {/* Ícono ilustrativo central */}
+                    <div
+                      className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl ${cat.theme.iconBg} shadow-md flex items-center justify-center group-hover:scale-110 transition-transform duration-200`}
+                    >
+                      <IconComponent className="w-6 h-6 sm:w-7 sm:h-7" />
+                    </div>
+
+                    {cat.count > 0 && (
+                      <span
+                        className={`absolute top-2 right-2 ${cat.theme.badgeBg} ${cat.theme.badgeText} text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm`}
+                      >
+                        {cat.count} {cat.count === 1 ? 'item' : 'items'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Título grande + subtítulo explicativo */}
+                  <div className="p-3 bg-white border-t border-gray-100 flex items-center justify-between gap-2 flex-1">
+                    <div className="min-w-0 space-y-0.5">
+                      <h3 className="font-black text-xs sm:text-sm text-gray-900 leading-snug line-clamp-2 group-hover:text-[#1B2A82] transition-colors">
+                        {cat.label}
+                      </h3>
+                      <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 line-clamp-1">
+                        {cat.theme.subtitle}
+                      </p>
+                    </div>
+                    <span className="w-6 h-6 rounded-full bg-blue-50 text-[#1B2A82] flex items-center justify-center shrink-0 group-hover:bg-[#1B2A82] group-hover:text-white transition-colors">
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </section>
+
         {/* Sección 0: Nuevos Productos / Lanzamientos */}
         {newProducts.length > 0 && (
           <section className="space-y-3 w-full min-w-0">
@@ -326,12 +532,12 @@ export default function TiendaPage() {
           </section>
         )}
 
-        {/* Sección 2: Catálogo de Productos */}
+        {/* Sección 2: Catálogo Destacado */}
         <section className="space-y-3 w-full min-w-0">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-amber-500" />
-              <span>Productos Disponibles</span>
+              <span>Productos Destacados</span>
             </h2>
             <span className="text-xs text-gray-400 font-bold">
               {regularProducts.length} productos
